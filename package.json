@@ -1,0 +1,20 @@
+{
+  "name": "dark-cinema",
+  "version": "1.0.0",
+  "description": "رفع، تحويل، وبث فيديو إلى Discord (Self-Bot)",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "@dank074/discord-video-stream": "^6.0.0",
+    "discord.js-selfbot-v13": "^3.8.9",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "fluent-ffmpeg": "^2.1.2",
+    "ffmpeg-static": "^5.2.0",
+    "uuid": "^9.0.0"
+  }
+}
