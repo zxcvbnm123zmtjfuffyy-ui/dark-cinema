@@ -13,7 +13,8 @@ function logError(context, error) {
     if (error.stack) console.error(error.stack);
 }
 
-export async function startStream(videoUrl) {
+export async function startStream(videoUrl, retryCount = 0) {
+    const MAX_RETRIES = 2;
     if (isStreaming) {
         console.log("⚠️ البث قيد التشغيل بالفعل");
         return { success: false, message: "البث قيد التشغيل" };
@@ -55,17 +56,23 @@ export async function startStream(videoUrl) {
 
     } catch (error) {
         logError("startStream", error);
-        try {
-            if (currentStreamer) {
-                await currentStreamer.leaveVoice().catch(() => {});
-                await currentStreamer.client.destroy().catch(() => {});
+        if (retryCount < MAX_RETRIES) {
+            console.log(`🔄 إعادة محاولة البث (${retryCount + 1}/${MAX_RETRIES})...`);
+            await new Promise(resolve => setTimeout(resolve, 3000)); // تأخير 3 ثوانٍ
+            return startStream(videoUrl, retryCount + 1);
+        } else {
+            try {
+                if (currentStreamer) {
+                    await currentStreamer.leaveVoice().catch(() => {});
+                    await currentStreamer.client.destroy().catch(() => {});
+                }
+            } catch (cleanupError) {
+                logError("cleanup after failure", cleanupError);
             }
-        } catch (cleanupError) {
-            logError("cleanup after failure", cleanupError);
+            currentStreamer = null;
+            isStreaming = false;
+            return { success: false, message: error.message };
         }
-        currentStreamer = null;
-        isStreaming = false;
-        return { success: false, message: error.message };
     }
 }
 
