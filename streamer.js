@@ -1,4 +1,4 @@
-import { Client } from "discord.js-selfbot-v13";
+import { Client } from "djs-selfbot-v13";
 import { Streamer, prepareStream, playStream, Encoders, Utils } from '@dank074/discord-video-stream';
 import dotenv from 'dotenv';
 
