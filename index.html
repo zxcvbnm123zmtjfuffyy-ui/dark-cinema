@@ -7,7 +7,7 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: system-ui, sans-serif;
             background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             color: #eee;
             min-height: 100vh;
@@ -21,182 +21,128 @@
             backdrop-filter: blur(10px);
             border-radius: 32px;
             padding: 2rem;
-            max-width: 700px;
+            max-width: 680px;
             width: 100%;
             box-shadow: 0 25px 45px rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.12);
         }
-        h1 { text-align: center; color: #5865F2; margin-bottom: 0.3rem; font-size: 1.8rem; }
-        .sub { text-align: center; margin-bottom: 1.5rem; opacity: 0.6; font-size: 0.9rem; }
+        h1 { text-align: center; color: #5865F2; font-size: 1.8rem; margin-bottom: .2rem; }
+        .sub { text-align: center; opacity: .5; font-size: .85rem; margin-bottom: 1.5rem; }
 
-        /* Upload Area */
+        /* Upload */
         .upload-area {
             border: 2px dashed #5865F2;
             border-radius: 20px;
             padding: 2rem;
             text-align: center;
             cursor: pointer;
-            transition: 0.2s;
+            transition: .2s;
             margin-bottom: 1.2rem;
-            position: relative;
         }
-        .upload-area:hover { background: rgba(88,101,242,0.1); border-color: #7983f5; }
-        .upload-area.dragover { background: rgba(88,101,242,0.2); border-color: #fff; }
-        .upload-area.disabled { opacity: 0.4; pointer-events: none; }
+        .upload-area:hover  { background: rgba(88,101,242,.1); border-color: #7983f5; }
+        .upload-area.over   { background: rgba(88,101,242,.2); border-color: #fff; }
+        .upload-area.disabled { opacity: .4; pointer-events: none; }
         input[type="file"] { display: none; }
-        .upload-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
-        .upload-text { font-size: 0.95rem; opacity: 0.8; }
+        .upload-icon { font-size: 2.5rem; margin-bottom: .5rem; }
 
-        /* Progress */
-        .progress-wrap { display: none; margin-bottom: 1.2rem; }
-        .progress-wrap.visible { display: block; }
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.4rem;
-            font-size: 0.85rem;
-        }
-        .progress-label { opacity: 0.8; }
-        .progress-percent { color: #5865F2; font-weight: bold; }
-        .progress-bar-bg {
-            background: rgba(255,255,255,0.1);
-            border-radius: 100px;
-            height: 10px;
-            overflow: hidden;
-        }
-        .progress-bar-fill {
-            height: 100%;
+        /* Upload progress */
+        .upload-progress { display: none; margin-bottom: 1.2rem; }
+        .upload-progress.show { display: block; }
+        .prog-header { display: flex; justify-content: space-between; font-size: .83rem; margin-bottom: .4rem; }
+        .prog-pct  { color: #5865F2; font-weight: bold; }
+        .prog-bg   { background: rgba(255,255,255,.1); border-radius: 100px; height: 10px; overflow: hidden; }
+        .prog-fill {
+            height: 100%; border-radius: 100px;
             background: linear-gradient(90deg, #5865F2, #7983f5);
-            border-radius: 100px;
-            width: 0%;
-            transition: width 0.3s ease;
+            width: 0%; transition: width .3s;
         }
-        .progress-bar-fill.error { background: #da373c; }
-        .progress-bar-fill.done { background: #57F287; }
-        .progress-sub {
-            margin-top: 0.4rem;
-            font-size: 0.78rem;
-            opacity: 0.6;
-            text-align: center;
-        }
-        .progress-stalled {
-            display: none;
-            color: #faa81a;
-            font-size: 0.82rem;
-            text-align: center;
-            margin-top: 0.4rem;
-        }
+        .prog-fill.done  { background: #57F287; }
+        .prog-fill.error { background: #da373c; }
+        .prog-sub { font-size: .75rem; opacity: .6; text-align: center; margin-top: .35rem; }
 
-        /* Video Info */
+        /* Video info */
         .video-info {
-            background: rgba(255,255,255,0.05);
-            border-radius: 12px;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1.2rem;
-            font-size: 0.82rem;
             display: none;
+            background: rgba(87,242,135,.07);
+            border: 1px solid rgba(87,242,135,.2);
+            border-radius: 12px;
+            padding: .7rem 1rem;
+            margin-bottom: 1.2rem;
+            font-size: .82rem;
         }
-        .video-info.visible { display: block; opacity: 1; }
+        .video-info.show { display: block; }
         .video-info strong { color: #57F287; }
 
         /* Buttons */
-        .button-group { display: flex; gap: 0.8rem; margin-bottom: 1.2rem; }
+        .btn-group { display: flex; gap: .8rem; margin-bottom: 1.2rem; }
         button {
+            flex: 1; border: none; border-radius: 40px;
+            padding: 12px 20px; font-size: .95rem; font-weight: bold;
+            cursor: pointer; transition: .2s; color: #fff;
             background: #5865F2;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 40px;
-            font-size: 0.95rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-            flex: 1;
         }
-        button:hover:not(:disabled) { background: #4752c4; transform: scale(1.02); }
-        button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        button:hover:not(:disabled) { filter: brightness(1.15); transform: scale(1.02); }
+        button:disabled { opacity: .35; cursor: not-allowed; transform: none; }
         .btn-stop { background: #da373c; }
-        .btn-stop:hover:not(:disabled) { background: #ba2b2f; }
 
         /* Status */
         .status-bar {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-            background: rgba(255,255,255,0.05);
-            border-radius: 12px;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1rem;
-            font-size: 0.88rem;
+            display: flex; align-items: center; gap: .6rem;
+            background: rgba(255,255,255,.05); border-radius: 12px;
+            padding: .7rem 1rem; margin-bottom: 1rem; font-size: .88rem;
         }
-        .status-dot {
-            width: 10px; height: 10px;
-            border-radius: 50%;
-            background: #ED4245;
-            flex-shrink: 0;
-        }
-        .status-dot.live { background: #57F287; animation: pulse 1.5s infinite; }
-        .status-dot.connecting { background: #faa81a; animation: pulse 0.8s infinite; }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #ED4245; flex-shrink: 0; }
+        .dot.live  { background: #57F287; animation: pulse 1.5s infinite; }
+        .dot.conn  { background: #faa81a; animation: pulse .8s infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.3; } }
 
         /* Logs */
         .logs {
-            background: #0a0a14;
-            border-radius: 16px;
-            padding: 0.8rem 1rem;
-            font-family: monospace;
-            font-size: 0.75rem;
-            max-height: 180px;
-            overflow-y: auto;
-            line-height: 1.6;
+            background: #0a0a14; border-radius: 16px;
+            padding: .8rem 1rem; font-family: monospace;
+            font-size: .74rem; max-height: 200px; overflow-y: auto; line-height: 1.7;
         }
-        .log-line { opacity: 0.8; }
-        .log-line.success { color: #57F287; opacity: 1; }
-        .log-line.error { color: #ED4245; opacity: 1; }
+        .log-line { opacity: .8; }
+        .log-line.ok   { color: #57F287; opacity: 1; }
+        .log-line.err  { color: #ED4245; opacity: 1; }
         .log-line.warn { color: #faa81a; opacity: 1; }
-        .log-time { opacity: 0.4; margin-left: 0.4rem; }
+        .log-time { opacity: .35; margin-right: .4rem; font-size: .7rem; }
     </style>
 </head>
 <body>
 <div class="card">
     <h1>🎬 Dark Cinema Pro</h1>
-    <div class="sub">رفع • تحويل • بث مباشر إلى ديسكورد</div>
+    <div class="sub">رفع مباشر • بث فوري إلى ديسكورد</div>
 
-    <!-- Upload Area -->
+    <!-- Upload -->
     <div class="upload-area" id="uploadArea">
         <div class="upload-icon">📁</div>
-        <div class="upload-text">اسحب الفيديو هنا أو اضغط للاختيار</div>
+        <div id="uploadText">اسحب الفيديو هنا أو اضغط للاختيار</div>
         <input type="file" id="fileInput" accept="video/*">
     </div>
 
-    <!-- Progress Bar -->
-    <div class="progress-wrap" id="progressWrap">
-        <div class="progress-header">
-            <span class="progress-label" id="progressLabel">جاري التحويل...</span>
-            <span class="progress-percent" id="progressPercent">0%</span>
+    <!-- Upload Progress -->
+    <div class="upload-progress" id="uploadProgress">
+        <div class="prog-header">
+            <span id="progLabel">جاري الرفع...</span>
+            <span class="prog-pct" id="progPct">0%</span>
         </div>
-        <div class="progress-bar-bg">
-            <div class="progress-bar-fill" id="progressFill"></div>
-        </div>
-        <div class="progress-sub" id="progressSub"></div>
-        <div class="progress-stalled" id="stalledMsg">⚠️ يبدو أن العملية توقفت، تحقق من الاتصال</div>
+        <div class="prog-bg"><div class="prog-fill" id="progFill"></div></div>
+        <div class="prog-sub" id="progSub"></div>
     </div>
 
     <!-- Video Info -->
     <div class="video-info" id="videoInfo"></div>
 
     <!-- Buttons -->
-    <div class="button-group">
+    <div class="btn-group">
         <button id="startBtn" disabled>▶ بدء البث</button>
-        <button id="stopBtn" class="btn-stop" disabled>⏹ إيقاف البث</button>
+        <button id="stopBtn" class="btn-stop" disabled>⏹ إيقاف</button>
     </div>
 
     <!-- Status -->
     <div class="status-bar">
-        <div class="status-dot" id="statusDot"></div>
+        <div class="dot" id="dot"></div>
         <span id="statusText">غير متصل</span>
     </div>
 
@@ -205,258 +151,207 @@
 </div>
 
 <script>
-    let currentVideoUrl = null;
-    let currentVideoId = null;
-    let stalledTimer = null;
+let currentFilePath = null;
+let currentFileId   = null;
 
-    // ───── Logging ─────
-    function log(msg, type = '') {
-        const div = document.getElementById('logs');
-        const line = document.createElement('div');
-        line.className = `log-line ${type}`;
-        const time = new Date().toLocaleTimeString('ar');
-        line.innerHTML = `${msg}<span class="log-time">${time}</span>`;
-        div.appendChild(line);
-        div.scrollTop = div.scrollHeight;
-        while (div.children.length > 60) div.removeChild(div.firstChild);
-    }
+// ── Logging ──────────────────────────────────────────────────────────────
+function log(msg, type = '') {
+    const div  = document.getElementById('logs');
+    const line = document.createElement('div');
+    line.className = 'log-line ' + type;
+    const t = new Date().toLocaleTimeString('ar');
+    line.innerHTML = `<span class="log-time">${t}</span>${msg}`;
+    div.appendChild(line);
+    div.scrollTop = div.scrollHeight;
+    while (div.children.length > 80) div.removeChild(div.firstChild);
+}
 
-    // ───── Status ─────
-    function setStatus(text, state = '') {
-        document.getElementById('statusText').textContent = text;
-        const dot = document.getElementById('statusDot');
-        dot.className = 'status-dot' + (state ? ' ' + state : '');
-    }
+function setStatus(text, state = '') {
+    document.getElementById('statusText').textContent = text;
+    document.getElementById('dot').className = 'dot' + (state ? ' ' + state : '');
+}
 
-    // ───── Progress ─────
-    function showProgress(visible) {
-        document.getElementById('progressWrap').classList.toggle('visible', visible);
-    }
+function setProgress(pct, label, sub = '', state = '') {
+    document.getElementById('progPct').textContent   = pct + '%';
+    document.getElementById('progLabel').textContent = label;
+    document.getElementById('progSub').textContent   = sub;
+    const fill = document.getElementById('progFill');
+    fill.style.width = pct + '%';
+    fill.className = 'prog-fill' + (state ? ' ' + state : '');
+}
 
-    function setProgress(percent, label, sub = '', state = '') {
-        document.getElementById('progressPercent').textContent = percent + '%';
-        document.getElementById('progressLabel').textContent = label;
-        document.getElementById('progressSub').textContent = sub;
-        const fill = document.getElementById('progressFill');
-        fill.style.width = percent + '%';
-        fill.className = 'progress-bar-fill' + (state ? ' ' + state : '');
+// ── Upload Area ───────────────────────────────────────────────────────────
+const area = document.getElementById('uploadArea');
+area.onclick = () => {
+    if (!area.classList.contains('disabled')) document.getElementById('fileInput').click();
+};
+area.addEventListener('dragover',  (e) => { e.preventDefault(); area.classList.add('over'); });
+area.addEventListener('dragleave', ()  => area.classList.remove('over'));
+area.addEventListener('drop', (e) => {
+    e.preventDefault(); area.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+});
+document.getElementById('fileInput').onchange = (e) => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+};
 
-        clearTimeout(stalledTimer);
-        if (percent > 0 && percent < 100) {
-            stalledTimer = setTimeout(() => {
-                document.getElementById('stalledMsg').style.display = 'block';
-                log('⚠️ يبدو أن التحويل توقف', 'warn');
-            }, 30000);
-        } else {
-            document.getElementById('stalledMsg').style.display = 'none';
-        }
-    }
+// ── رفع الفيديو ───────────────────────────────────────────────────────────
+function handleFile(file) {
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+    log(`📁 ${file.name} — ${sizeMB} MB`);
 
-    // ───── Upload ─────
-    document.getElementById('uploadArea').onclick = () => {
-        if (!document.getElementById('uploadArea').classList.contains('disabled'))
-            document.getElementById('fileInput').click();
+    currentFilePath = null;
+    currentFileId   = null;
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('videoInfo').classList.remove('show');
+    area.classList.add('disabled');
+    document.getElementById('uploadProgress').classList.add('show');
+    setProgress(0, 'جاري الرفع...', '');
+
+    const xhr      = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('video', file);
+
+    // تقدم الرفع
+    xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const pct  = Math.round((e.loaded / e.total) * 100);
+        const done = (e.loaded / 1024 / 1024).toFixed(1);
+        const total= (e.total  / 1024 / 1024).toFixed(1);
+        setProgress(pct, 'جاري الرفع...', `${done} / ${total} MB`);
     };
 
-    document.getElementById('uploadArea').addEventListener('dragover', (e) => {
-        e.preventDefault();
-        document.getElementById('uploadArea').classList.add('dragover');
-    });
-    document.getElementById('uploadArea').addEventListener('dragleave', () => {
-        document.getElementById('uploadArea').classList.remove('dragover');
-    });
-    document.getElementById('uploadArea').addEventListener('drop', (e) => {
-        e.preventDefault();
-        document.getElementById('uploadArea').classList.remove('dragover');
-        const file = e.dataTransfer.files[0];
-        if (file) handleFile(file);
-    });
-
-    document.getElementById('fileInput').onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) handleFile(file);
-    };
-
-    function handleFile(file) {
-        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        log(`📁 ${file.name} — ${sizeMB} MB`);
-
-        currentVideoUrl = null;
-        currentVideoId = null;
-        document.getElementById('startBtn').disabled = true;
-        document.getElementById('uploadArea').classList.add('disabled');
-        document.getElementById('videoInfo').classList.remove('visible');
-        showProgress(true);
-        setProgress(0, 'جاري رفع الملف...', '');
-        document.getElementById('stalledMsg').style.display = 'none';
-
-        const xhr = new XMLHttpRequest();
-        const formData = new FormData();
-        formData.append('video', file);
-
-        // تقدم الرفع (0 → 40%)
-        xhr.upload.onprogress = (e) => {
-            if (!e.lengthComputable) return;
-            const pct = Math.round((e.loaded / e.total) * 40);
-            const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
-            const totalMB = (e.total / 1024 / 1024).toFixed(1);
-            setProgress(pct, 'رفع الملف...', `${uploadedMB} / ${totalMB} MB`);
-        };
-
-        xhr.upload.onload = () => {
-            setProgress(40, 'جاري التحويل إلى HLS...', 'هذا قد يأخذ وقتاً حسب حجم الفيديو');
-            log('✅ اكتمل الرفع، جاري التحويل...');
-        };
-
-        xhr.upload.onerror = () => {
-            setProgress(0, 'فشل الرفع!', '', 'error');
-            log('❌ فشل رفع الملف', 'error');
-            document.getElementById('uploadArea').classList.remove('disabled');
-            showProgress(false);
-        };
-
-        // ── معالجة SSE ──
-        let buffer = '';
-        xhr.onreadystatechange = () => {
-            if (xhr.readyState >= 3) {
-                const newText = xhr.responseText.slice(buffer.length);
-                buffer = xhr.responseText;
-                const lines = newText.split('\n');
-                for (const line of lines) {
-                    if (!line.startsWith('data: ')) continue;
-                    try {
-                        const data = JSON.parse(line.slice(6));
-                        if (data.stage === 'converting') {
-                            const total = 40 + Math.round(data.percent * 0.6);
-                            setProgress(total, `تحويل: ${data.percent}%`, 'جاري تحويل الفيديو إلى HLS...');
-                        } else if (data.stage === 'done') {
-                            clearTimeout(stalledTimer);
-                            currentVideoUrl = data.videoUrl;
-                            currentVideoId = data.videoId;
-                            setProgress(100, 'اكتمل التحويل!', '', 'done');
-                            document.getElementById('videoInfo').innerHTML =
-                                `<strong>✅ جاهز للبث</strong> — ${data.videoUrl}`;
-                            document.getElementById('videoInfo').classList.add('visible');
-                            document.getElementById('startBtn').disabled = false;
-                            document.getElementById('uploadArea').classList.remove('disabled');
-                            log('🎬 الفيديو جاهز للبث', 'success');
-                            setTimeout(() => showProgress(false), 2000);
-                        } else if (data.stage === 'error') {
-                            clearTimeout(stalledTimer);
-                            setProgress(0, 'حدث خطأ!', data.message, 'error');
-                            log(`❌ ${data.message}`, 'error');
-                            document.getElementById('uploadArea').classList.remove('disabled');
-                        }
-                    } catch (_) { /* تجاهل أسطر ناقصة */ }
-                }
-            }
-        };
-
-        xhr.onerror = () => {
-            log('❌ انقطع الاتصال بالسيرفر أثناء الرفع', 'error');
-            document.getElementById('uploadArea').classList.remove('disabled');
-            showProgress(false);
-        };
-
-        xhr.open('POST', '/upload-stream');
-        xhr.send(formData);
-    }
-
-    // ───── Stream Controls ─────
-    document.getElementById('startBtn').onclick = async () => {
-        if (!currentVideoUrl) return;
-        log('▶ بدء البث...');
-        setStatus('جاري الاتصال...', 'connecting');
-        document.getElementById('startBtn').disabled = true;
-        document.getElementById('stopBtn').disabled = false;
-
-        try {
-            const res = await fetch('/api/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ videoUrl: currentVideoUrl, videoId: currentVideoId })
-            });
-
-            // ── هنا كان الخطأ الأصلي: نتحقق من الـ status قبل .json() ──
-            const text = await res.text();
-            let data;
+    xhr.onreadystatechange = () => {
+        if (xhr.readyState < 3) return;
+        const text = xhr.responseText;
+        const lines = text.split('\n');
+        for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
             try {
-                data = JSON.parse(text);
-            } catch {
-                log(`❌ رد غير متوقع من السيرفر: ${text.slice(0, 100)}`, 'error');
-                setStatus('خطأ في السيرفر');
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('stopBtn').disabled = true;
-                return;
-            }
+                const data = JSON.parse(line.slice(6));
+                if (data.stage === 'done') {
+                    currentFilePath = data.filePath;
+                    currentFileId   = data.fileId;
 
-            if (data.success) {
-                log('🎥 ' + data.message, 'success');
-                setStatus('يبث الآن', 'live');
-            } else {
-                log('❌ ' + data.message, 'error');
-                setStatus('فشل البث');
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('stopBtn').disabled = true;
-            }
-        } catch (e) {
-            log('❌ خطأ في الاتصال: ' + e.message, 'error');
-            setStatus('خطأ في الاتصال');
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-        }
-    };
+                    setProgress(100, 'اكتمل الرفع!', '', 'done');
+                    log('✅ اكتمل الرفع — جاهز للبث', 'ok');
 
-    document.getElementById('stopBtn').onclick = async () => {
-        log('⏹ إيقاف البث...');
-        try {
-            const res = await fetch('/api/stop', { method: 'POST' });
-            const text = await res.text();
-            let data;
-            try { data = JSON.parse(text); } catch { data = { success: false, message: text }; }
-            log(data.success ? '🛑 ' + data.message : '⚠️ ' + data.message,
-                data.success ? 'warn' : 'error');
-        } catch (e) {
-            log('❌ ' + e.message, 'error');
-        }
-        setStatus('متوقف');
-        document.getElementById('startBtn').disabled = !currentVideoUrl;
-        document.getElementById('stopBtn').disabled = true;
-    };
+                    document.getElementById('videoInfo').innerHTML =
+                        `<strong>✅ جاهز للبث</strong> — ${file.name} (${data.sizeMB} MB)`;
+                    document.getElementById('videoInfo').classList.add('show');
+                    document.getElementById('startBtn').disabled = false;
+                    area.classList.remove('disabled');
+                    setTimeout(() => document.getElementById('uploadProgress').classList.remove('show'), 2000);
 
-    // ───── Status Polling ─────
-    async function updateStatus() {
-        try {
-            const res = await fetch('/api/status');
-            if (!res.ok) return;
-            const text = await res.text();
-            let data;
-            try { data = JSON.parse(text); } catch { return; }
-
-            if (data.isStreaming) {
-                setStatus('يبث الآن', 'live');
-                document.getElementById('stopBtn').disabled = false;
-            } else if (!data.isReady) {
-                setStatus('جاري تهيئة الاتصال...', 'connecting');
-            } else {
-                const dot = document.getElementById('statusDot');
-                if (dot.className.includes('live')) {
-                    setStatus('انتهى الفيديو');
-                    log('✅ انتهى الفيديو تلقائياً', 'success');
-                    document.getElementById('startBtn').disabled = !currentVideoUrl;
-                    document.getElementById('stopBtn').disabled = true;
-                } else if (!dot.className.includes('connecting')) {
-                    // عرض اسم المستخدم لو موجود
-                    const userTag = data.user ? ` (${data.user})` : '';
-                    setStatus(`متصل${userTag}`, '');
+                } else if (data.stage === 'error') {
+                    setProgress(0, 'فشل الرفع!', data.error, 'error');
+                    log('❌ ' + data.error, 'err');
+                    area.classList.remove('disabled');
                 }
-            }
-        } catch { /* صمت في حالة انقطاع مؤقت */ }
-    }
+            } catch {}
+        }
+    };
 
-    setInterval(updateStatus, 4000);
-    updateStatus();
-    log('🚀 لوحة التحكم جاهزة');
+    xhr.onerror = () => {
+        log('❌ انقطع الاتصال أثناء الرفع', 'err');
+        area.classList.remove('disabled');
+        document.getElementById('uploadProgress').classList.remove('show');
+    };
+
+    xhr.open('POST', '/upload-stream');
+    xhr.send(formData);
+}
+
+// ── بدء البث ─────────────────────────────────────────────────────────────
+document.getElementById('startBtn').onclick = async () => {
+    if (!currentFilePath) return;
+
+    log('▶ بدء البث...');
+    setStatus('جاري الاتصال...', 'conn');
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('stopBtn').disabled  = false;
+
+    try {
+        const res  = await fetch('/api/start', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ filePath: currentFilePath, fileId: currentFileId })
+        });
+
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); }
+        catch {
+            log('❌ رد غير متوقع: ' + text.slice(0, 120), 'err');
+            setStatus('خطأ في السيرفر');
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled  = true;
+            return;
+        }
+
+        if (data.success) {
+            log('🎥 ' + data.message, 'ok');
+            setStatus('يبث الآن', 'live');
+        } else {
+            log('❌ ' + data.message, 'err');
+            setStatus('فشل البث');
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled  = true;
+        }
+    } catch (e) {
+        log('❌ ' + e.message, 'err');
+        setStatus('خطأ في الاتصال');
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled  = true;
+    }
+};
+
+// ── إيقاف البث ────────────────────────────────────────────────────────────
+document.getElementById('stopBtn').onclick = async () => {
+    log('⏹ إيقاف البث...');
+    try {
+        const res  = await fetch('/api/stop', { method: 'POST' });
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = { success: false, message: text }; }
+        log(data.success ? '🛑 ' + data.message : '⚠️ ' + data.message, data.success ? 'warn' : 'err');
+    } catch (e) { log('❌ ' + e.message, 'err'); }
+
+    setStatus('متوقف');
+    document.getElementById('startBtn').disabled = !currentFilePath;
+    document.getElementById('stopBtn').disabled  = true;
+};
+
+// ── Status Polling ────────────────────────────────────────────────────────
+async function poll() {
+    try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        const data = JSON.parse(await res.text());
+        const dot  = document.getElementById('dot');
+
+        if (data.isStreaming) {
+            setStatus('يبث الآن', 'live');
+            document.getElementById('stopBtn').disabled = false;
+        } else if (!data.isReady) {
+            setStatus('جاري التهيئة...', 'conn');
+        } else {
+            if (dot.classList.contains('live')) {
+                log('✅ انتهى الفيديو تلقائياً', 'ok');
+                setStatus('انتهى');
+                document.getElementById('startBtn').disabled = !currentFilePath;
+                document.getElementById('stopBtn').disabled  = true;
+                currentFilePath = null; // الملف حُذف من السيرفر
+            } else if (!dot.classList.contains('conn')) {
+                setStatus('متصل' + (data.user ? ` (${data.user})` : ''));
+            }
+        }
+    } catch {}
+}
+setInterval(poll, 4000);
+poll();
+log('🚀 لوحة التحكم جاهزة');
 </script>
 </body>
 </html>
