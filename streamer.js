@@ -59,7 +59,7 @@ export async function startStream(videoUrl, processedDir) {
         if (!channel || !channel.isVoice()) throw new Error(`الروم الصوتي غير صالح: ${process.env.CHANNEL_ID}`);
 
         console.log(`🎧 الانضمام إلى: ${channel.name}`);
-        await channel.join();
+        await streamer.joinVoice(process.env.GUILD_ID, process.env.CHANNEL_ID);
 
         console.log(`🎬 تجهيز البث من: ${videoUrl}`);
         const encoder = Encoders.software({ x264: { preset: "ultrafast" } });
