@@ -1,7 +1,7 @@
 {
-  "name": "dark-cinema-pro",
+  "name": "dark-cinema",
   "version": "2.0.0",
-  "description": "Professional streaming platform with resume and progress (Self-Bot)",
+  "description": "Upload, convert, and stream videos to Discord (Self-Bot)",
   "main": "app.js",
   "type": "module",
   "scripts": {
