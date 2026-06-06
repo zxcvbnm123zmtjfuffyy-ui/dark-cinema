@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,167 +24,419 @@
             max-width: 700px;
             width: 100%;
             box-shadow: 0 25px 45px rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.15);
         }
-        h1 { text-align: center; color: #5865F2; margin-bottom: 0.5rem; }
-        .sub { text-align: center; margin-bottom: 2rem; opacity: 0.8; }
+        h1 { text-align: center; color: #5865F2; margin-bottom: 0.3rem; font-size: 1.8rem; }
+        .sub { text-align: center; margin-bottom: 1.5rem; opacity: 0.6; font-size: 0.9rem; }
+
+        /* Upload Area */
         .upload-area {
             border: 2px dashed #5865F2;
-            border-radius: 24px;
+            border-radius: 20px;
             padding: 2rem;
             text-align: center;
             cursor: pointer;
             transition: 0.2s;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.2rem;
+            position: relative;
         }
-        .upload-area:hover { background: rgba(88,101,242,0.1); }
+        .upload-area:hover { background: rgba(88,101,242,0.1); border-color: #7983f5; }
+        .upload-area.dragover { background: rgba(88,101,242,0.2); border-color: #fff; }
+        .upload-area.disabled { opacity: 0.4; pointer-events: none; }
         input[type="file"] { display: none; }
-        .button-group { display: flex; gap: 1rem; margin: 1rem 0; }
+        .upload-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .upload-text { font-size: 0.95rem; opacity: 0.8; }
+
+        /* Progress */
+        .progress-wrap {
+            display: none;
+            margin-bottom: 1.2rem;
+        }
+        .progress-wrap.visible { display: block; }
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.4rem;
+            font-size: 0.85rem;
+        }
+        .progress-label { opacity: 0.8; }
+        .progress-percent { color: #5865F2; font-weight: bold; }
+        .progress-bar-bg {
+            background: rgba(255,255,255,0.1);
+            border-radius: 100px;
+            height: 10px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #5865F2, #7983f5);
+            border-radius: 100px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .progress-bar-fill.error { background: #da373c; }
+        .progress-bar-fill.done { background: #57F287; }
+        .progress-sub {
+            margin-top: 0.4rem;
+            font-size: 0.78rem;
+            opacity: 0.6;
+            text-align: center;
+        }
+        .progress-stalled {
+            display: none;
+            color: #faa81a;
+            font-size: 0.82rem;
+            text-align: center;
+            margin-top: 0.4rem;
+        }
+
+        /* Video Info */
+        .video-info {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.2rem;
+            font-size: 0.82rem;
+            opacity: 0.7;
+            display: none;
+        }
+        .video-info.visible { display: block; opacity: 1; }
+        .video-info strong { color: #57F287; }
+
+        /* Buttons */
+        .button-group { display: flex; gap: 0.8rem; margin-bottom: 1.2rem; }
         button {
             background: #5865F2;
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 12px 20px;
             border-radius: 40px;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: bold;
             cursor: pointer;
             transition: 0.2s;
             flex: 1;
         }
-        button:hover { background: #4752c4; transform: scale(1.02); }
+        button:hover:not(:disabled) { background: #4752c4; transform: scale(1.02); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         .btn-stop { background: #da373c; }
-        .btn-stop:hover { background: #ba2b2f; }
-        .status {
-            background: #1e1e2f;
-            border-radius: 20px;
-            padding: 1rem;
-            text-align: center;
-            margin: 1rem 0;
+        .btn-stop:hover:not(:disabled) { background: #ba2b2f; }
+
+        /* Status */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.88rem;
         }
-        .streaming { color: #57F287; font-weight: bold; }
-        .stopped { color: #ED4245; }
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #ED4245;
+            flex-shrink: 0;
+        }
+        .status-dot.live { background: #57F287; animation: pulse 1.5s infinite; }
+        .status-dot.connecting { background: #faa81a; animation: pulse 0.8s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Logs */
         .logs {
             background: #0a0a14;
             border-radius: 16px;
-            padding: 1rem;
+            padding: 0.8rem 1rem;
             font-family: monospace;
             font-size: 0.75rem;
-            max-height: 200px;
+            max-height: 180px;
             overflow-y: auto;
-            white-space: pre-wrap;
+            line-height: 1.6;
         }
-        .info { background: #1e1e2f; border-radius: 12px; padding: 0.8rem; margin-bottom: 1rem; word-break: break-all; font-size: 0.8rem; }
+        .log-line { opacity: 0.8; }
+        .log-line.success { color: #57F287; opacity: 1; }
+        .log-line.error { color: #ED4245; opacity: 1; }
+        .log-line.warn { color: #faa81a; opacity: 1; }
+        .log-time { opacity: 0.4; margin-left: 0.4rem; }
     </style>
 </head>
 <body>
 <div class="card">
-    <h1>Dark Cinema Pro</h1>
-    <div class="sub">رفع، تحويل، بث مباشر إلى ديسكورد</div>
+    <h1>🎬 Dark Cinema Pro</h1>
+    <div class="sub">رفع • تحويل • بث مباشر إلى ديسكورد</div>
 
+    <!-- Upload Area -->
     <div class="upload-area" id="uploadArea">
-        <p>اسحب الفيديو هنا أو اضغط للاختيار</p>
+        <div class="upload-icon">📁</div>
+        <div class="upload-text">اسحب الفيديو هنا أو اضغط للاختيار</div>
         <input type="file" id="fileInput" accept="video/*">
     </div>
-    <div id="uploadStatus"></div>
 
-    <div class="info" id="videoInfo">لم يتم رفع فيديو بعد</div>
-
-    <div class="button-group">
-        <button id="startBtn" disabled>بدء البث</button>
-        <button id="stopBtn" class="btn-stop">إيقاف البث</button>
+    <!-- Progress Bar -->
+    <div class="progress-wrap" id="progressWrap">
+        <div class="progress-header">
+            <span class="progress-label" id="progressLabel">جاري التحويل...</span>
+            <span class="progress-percent" id="progressPercent">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-sub" id="progressSub"></div>
+        <div class="progress-stalled" id="stalledMsg">⚠️ يبدو أن العملية توقفت، تحقق من الاتصال</div>
     </div>
 
-    <div class="status" id="statusText">غير متصل</div>
-    <div class="logs" id="logs">جاهز...</div>
+    <!-- Video Info -->
+    <div class="video-info" id="videoInfo"></div>
+
+    <!-- Buttons -->
+    <div class="button-group">
+        <button id="startBtn" disabled>▶ بدء البث</button>
+        <button id="stopBtn" class="btn-stop" disabled>⏹ إيقاف البث</button>
+    </div>
+
+    <!-- Status -->
+    <div class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">غير متصل</span>
+    </div>
+
+    <!-- Logs -->
+    <div class="logs" id="logs"></div>
 </div>
 
 <script>
     let currentVideoUrl = null;
+    let currentVideoId = null;
+    let stalledTimer = null;
+    let lastPercent = 0;
 
-    function addLog(msg) {
-        const logsDiv = document.getElementById('logs');
-        const time = new Date().toLocaleTimeString();
-        const entry = document.createElement('div');
-        entry.textContent = `[${time}] ${msg}`;
-        logsDiv.appendChild(entry);
-        logsDiv.scrollTop = logsDiv.scrollHeight;
-        while (logsDiv.children.length > 50) logsDiv.removeChild(logsDiv.firstChild);
+    // ───── Logging ─────
+    function log(msg, type = '') {
+        const div = document.getElementById('logs');
+        const line = document.createElement('div');
+        line.className = `log-line ${type}`;
+        const time = new Date().toLocaleTimeString('ar');
+        line.innerHTML = `${msg}<span class="log-time">${time}</span>`;
+        div.appendChild(line);
+        div.scrollTop = div.scrollHeight;
+        while (div.children.length > 60) div.removeChild(div.firstChild);
     }
 
-    async function updateStatus() {
-        try {
-            const res = await fetch('/api/status');
-            const data = await res.json();
-            const statusSpan = document.getElementById('statusText');
-            if (data.isStreaming) {
-                statusSpan.innerHTML = 'يبث الآن';
-                statusSpan.className = 'status streaming';
-            } else {
-                statusSpan.innerHTML = 'متوقف';
-                statusSpan.className = 'status stopped';
-            }
-        } catch(e) { addLog('خطأ في الحالة: ' + e.message); }
+    // ───── Status ─────
+    function setStatus(text, state = '') {
+        document.getElementById('statusText').textContent = text;
+        const dot = document.getElementById('statusDot');
+        dot.className = 'status-dot' + (state ? ' ' + state : '');
     }
 
-    document.getElementById('uploadArea').onclick = () => document.getElementById('fileInput').click();
-    document.getElementById('fileInput').onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        addLog(`رفع: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`);
-        document.getElementById('uploadStatus').innerHTML = '<p>جاري الرفع والتحويل...</p>';
-        const formData = new FormData();
-        formData.append('video', file);
-        try {
-            const res = await fetch('/upload', { method: 'POST', body: formData });
-            const data = await res.json();
-            if (data.success) {
-                currentVideoUrl = data.videoUrl;
-                addLog('تم التحويل بنجاح');
-                document.getElementById('uploadStatus').innerHTML = '<p>جاهز للبث</p>';
-                document.getElementById('videoInfo').innerHTML = `<strong>جاهز:</strong> ${currentVideoUrl}`;
-                document.getElementById('startBtn').disabled = false;
-            } else {
-                addLog('فشل: ' + data.error);
-                document.getElementById('uploadStatus').innerHTML = '<p>فشل الرفع</p>';
-            }
-        } catch(err) {
-            addLog('خطأ: ' + err.message);
-            document.getElementById('uploadStatus').innerHTML = '<p>خطأ في الرفع</p>';
+    // ───── Progress ─────
+    function showProgress(visible) {
+        document.getElementById('progressWrap').classList.toggle('visible', visible);
+    }
+
+    function setProgress(percent, label, sub = '', state = '') {
+        document.getElementById('progressPercent').textContent = percent + '%';
+        document.getElementById('progressLabel').textContent = label;
+        document.getElementById('progressSub').textContent = sub;
+        const fill = document.getElementById('progressFill');
+        fill.style.width = percent + '%';
+        fill.className = 'progress-bar-fill' + (state ? ' ' + state : '');
+
+        // كشف التوقف — لو ما تغير الـ% خلال 30 ثانية
+        clearTimeout(stalledTimer);
+        if (percent < 100 && percent > 0) {
+            stalledTimer = setTimeout(() => {
+                document.getElementById('stalledMsg').style.display = 'block';
+                log('⚠️ يبدو أن التحويل توقف', 'warn');
+            }, 30000);
+        } else {
+            document.getElementById('stalledMsg').style.display = 'none';
         }
+    }
+
+    // ───── Upload with SSE progress ─────
+    document.getElementById('uploadArea').onclick = () => {
+        if (!document.getElementById('uploadArea').classList.contains('disabled'))
+            document.getElementById('fileInput').click();
     };
 
-    document.getElementById('startBtn').onclick = async () => {
-        if (!currentVideoUrl) { addLog('لا يوجد فيديو'); return; }
-        addLog('بدء البث...');
+    document.getElementById('uploadArea').addEventListener('dragover', (e) => {
+        e.preventDefault();
+        document.getElementById('uploadArea').classList.add('dragover');
+    });
+    document.getElementById('uploadArea').addEventListener('dragleave', () => {
+        document.getElementById('uploadArea').classList.remove('dragover');
+    });
+    document.getElementById('uploadArea').addEventListener('drop', (e) => {
+        e.preventDefault();
+        document.getElementById('uploadArea').classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file) handleFile(file);
+    });
+
+    document.getElementById('fileInput').onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) handleFile(file);
+    };
+
+    function handleFile(file) {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        log(`📁 ${file.name} — ${sizeMB} MB`);
+
+        // إعداد الواجهة
+        currentVideoUrl = null;
+        currentVideoId = null;
         document.getElementById('startBtn').disabled = true;
+        document.getElementById('uploadArea').classList.add('disabled');
+        document.getElementById('videoInfo').classList.remove('visible');
+        showProgress(true);
+        setProgress(0, 'جاري رفع الملف...', '');
+        document.getElementById('stalledMsg').style.display = 'none';
+
+        // رفع الملف
+        const xhr = new XMLHttpRequest();
+        const formData = new FormData();
+        formData.append('video', file);
+
+        let uploadDone = false;
+
+        // تقدم الرفع
+        xhr.upload.onprogress = (e) => {
+            if (!e.lengthComputable) return;
+            const pct = Math.round((e.loaded / e.total) * 40); // الرفع = 0→40%
+            const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
+            const totalMB = (e.total / 1024 / 1024).toFixed(1);
+            setProgress(pct, `رفع الملف...`, `${uploadedMB} / ${totalMB} MB`);
+        };
+
+        xhr.upload.onload = () => {
+            uploadDone = true;
+            setProgress(40, 'جاري التحويل إلى HLS...', 'هذا قد يأخذ وقتاً حسب حجم الفيديو');
+            log('✅ اكتمل الرفع، جاري التحويل...');
+        };
+
+        xhr.upload.onerror = () => {
+            setProgress(0, 'فشل الرفع!', '', 'error');
+            log('❌ فشل رفع الملف', 'error');
+            document.getElementById('uploadArea').classList.remove('disabled');
+            showProgress(false);
+        };
+
+        // معالجة استجابة SSE
+        let buffer = '';
+        xhr.onreadystatechange = () => {
+            if (xhr.readyState >= 3) {
+                const newText = xhr.responseText.slice(buffer.length);
+                buffer = xhr.responseText;
+                const lines = newText.split('\n');
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.stage === 'converting') {
+                            // 40% رفع + 60% تحويل
+                            const total = 40 + Math.round(data.percent * 0.6);
+                            setProgress(total, `تحويل: ${data.percent}%`, 'جاري تحويل الفيديو إلى HLS...');
+                        } else if (data.stage === 'done') {
+                            clearTimeout(stalledTimer);
+                            currentVideoUrl = data.videoUrl;
+                            currentVideoId = data.videoId;
+                            setProgress(100, 'اكتمل التحويل!', '', 'done');
+                            document.getElementById('videoInfo').innerHTML =
+                                `<strong>✅ جاهز للبث</strong> — ${data.videoUrl}`;
+                            document.getElementById('videoInfo').classList.add('visible');
+                            document.getElementById('startBtn').disabled = false;
+                            document.getElementById('uploadArea').classList.remove('disabled');
+                            log('🎬 الفيديو جاهز للبث', 'success');
+                            setTimeout(() => showProgress(false), 2000);
+                        } else if (data.stage === 'error') {
+                            clearTimeout(stalledTimer);
+                            setProgress(0, 'حدث خطأ!', data.message, 'error');
+                            log(`❌ ${data.message}`, 'error');
+                            document.getElementById('uploadArea').classList.remove('disabled');
+                        }
+                    } catch {}
+                }
+            }
+        };
+
+        xhr.open('POST', '/upload-stream');
+        xhr.send(formData);
+    }
+
+    // ───── Stream Controls ─────
+    document.getElementById('startBtn').onclick = async () => {
+        if (!currentVideoUrl) return;
+        log('▶ بدء البث...');
+        setStatus('جاري الاتصال...', 'connecting');
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
         try {
             const res = await fetch('/api/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ videoUrl: currentVideoUrl })
+                body: JSON.stringify({ videoUrl: currentVideoUrl, videoId: currentVideoId })
             });
             const data = await res.json();
-            if (data.success) addLog(data.message);
-            else addLog('فشل البث: ' + data.message);
-        } catch(e) { addLog('خطأ: ' + e.message); }
-        document.getElementById('startBtn').disabled = false;
-        updateStatus();
+            if (data.success) {
+                log('🎥 ' + data.message, 'success');
+                setStatus('يبث الآن', 'live');
+            } else {
+                log('❌ ' + data.message, 'error');
+                setStatus('فشل البث');
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
+        } catch (e) {
+            log('❌ خطأ: ' + e.message, 'error');
+            document.getElementById('startBtn').disabled = false;
+        }
     };
 
     document.getElementById('stopBtn').onclick = async () => {
-        addLog('إيقاف البث...');
+        log('⏹ إيقاف البث...');
         try {
             const res = await fetch('/api/stop', { method: 'POST' });
             const data = await res.json();
-            addLog(data.message);
-        } catch(e) { addLog('خطأ: ' + e.message); }
+            log(data.success ? '🛑 ' + data.message : '⚠️ ' + data.message,
+                data.success ? 'warn' : 'error');
+        } catch (e) {
+            log('❌ ' + e.message, 'error');
+        }
+        setStatus('متوقف');
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
         updateStatus();
     };
 
+    // ───── Status Polling ─────
+    async function updateStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            if (data.isStreaming) {
+                setStatus('يبث الآن', 'live');
+                document.getElementById('stopBtn').disabled = false;
+            } else if (!data.isReady) {
+                setStatus('جاري تهيئة الاتصال...', 'connecting');
+            } else {
+                if (document.getElementById('statusDot').className.includes('live')) {
+                    setStatus('انتهى الفيديو');
+                    log('✅ انتهى الفيديو تلقائياً', 'success');
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                }
+            }
+        } catch {}
+    }
+
+    setInterval(updateStatus, 4000);
     updateStatus();
-    setInterval(updateStatus, 5000);
-    addLog('لوحة التحكم جاهزة');
+    log('🚀 لوحة التحكم جاهزة');
 </script>
 </body>
 </html>
