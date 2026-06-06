@@ -29,26 +29,65 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 * 1024 } });
 
+// ─── جلب مدة الفيديو ─────────────────────────────────────────────────────────
+const getVideoDuration = (filePath) => {
+    return new Promise((resolve) => {
+        ffmpeg.ffprobe(filePath, (err, metadata) => {
+            if (err || !metadata?.format?.duration) {
+                resolve(0);
+            } else {
+                resolve(parseFloat(metadata.format.duration));
+            }
+        });
+    });
+};
+
 // ─── تحويل HLS مع تتبع التقدم ───────────────────────────────────────────────
-const convertToHls = (inputPath, outputDir, onProgress) => {
+const convertToHls = async (inputPath, outputDir, onProgress) => {
+    const duration = await getVideoDuration(inputPath);
+    console.log(`[ffmpeg] مدة الفيديو: ${duration.toFixed(1)}s`);
+
     return new Promise((resolve, reject) => {
         const outputPlaylist = path.join(outputDir, 'output.m3u8');
         ffmpeg(inputPath)
             .outputOptions([
-                '-codec: copy',
-                '-start_number 0',
-                '-hls_time 10',
+                '-c:v libx264',          // إعادة ترميز الفيديو — يدعم التقدم والـ HLS
+                '-c:a aac',              // إعادة ترميز الصوت
+                '-preset ultrafast',     // أسرع تحويل على Render
+                '-crf 23',              // جودة متوازنة
+                '-g 48',                // keyframe كل 48 فريم (مهم للـ HLS)
+                '-sc_threshold 0',      // لا تقطع إلا على الـ keyframes
+                '-hls_time 6',
                 '-hls_list_size 0',
+                '-hls_segment_type mpegts',
+                '-start_number 0',
                 '-f hls'
             ])
             .output(outputPlaylist)
-            .on('progress', (progress) => {
-                if (onProgress && progress.percent) {
-                    onProgress(Math.min(Math.round(progress.percent), 99));
+            .on('stderr', (line) => {
+                // سجّل أخطاء ffmpeg الفعلية لتسهيل التشخيص
+                if (line.includes('Error') || line.includes('error') || line.includes('Invalid')) {
+                    console.error('[ffmpeg stderr]', line);
                 }
             })
+            .on('progress', (progress) => {
+                if (!onProgress) return;
+                let pct = 0;
+                if (progress.percent != null && progress.percent > 0) {
+                    pct = Math.min(Math.round(progress.percent), 99);
+                } else if (duration > 0 && progress.timemark) {
+                    // حساب بديل عبر timemark لو percent فارغ
+                    const parts = progress.timemark.split(':');
+                    const secs = (+parts[0]) * 3600 + (+parts[1]) * 60 + parseFloat(parts[2]);
+                    pct = Math.min(Math.round((secs / duration) * 100), 99);
+                }
+                onProgress(pct);
+            })
             .on('end', () => resolve(outputPlaylist))
-            .on('error', (err) => reject(err))
+            .on('error', (err) => {
+                console.error('[ffmpeg] error:', err.message);
+                reject(err);
+            })
             .run();
     });
 };
