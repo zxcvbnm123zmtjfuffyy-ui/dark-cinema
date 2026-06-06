@@ -175,14 +175,23 @@ app.post('/api/start', async (req, res) => {
             return res.status(400).json({ success: false, message: 'لا يوجد رابط فيديو' });
         }
 
-        // استخدام 127.0.0.1 بدلاً من req.get('host') لتفادي مشاكل Render
-        const internalBase = `http://127.0.0.1:${port}`;
-        const fullUrl = videoUrl.startsWith('http') ? videoUrl : `${internalBase}${videoUrl}`;
+        // نمرر مسار الملف مباشرة — Render لا يسمح بـ HTTP للسيرفر نفسه
+        let streamTarget;
+        if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
+            streamTarget = videoUrl;
+        } else {
+            streamTarget = path.join(__dirname, videoUrl);
+        }
 
         const processedDir = videoId ? path.join(PROCESSED_DIR, videoId) : null;
 
-        console.log(`[/api/start] videoUrl=${fullUrl}`);
-        const result = await startStream(fullUrl, processedDir);
+        console.log(`[/api/start] streamTarget=${streamTarget}`);
+
+        if (!videoUrl.startsWith('http') && !fs.existsSync(streamTarget)) {
+            return res.status(404).json({ success: false, message: `الملف غير موجود: ${streamTarget}` });
+        }
+
+        const result = await startStream(streamTarget, processedDir);
 
         return res.json(result);
     } catch (err) {
