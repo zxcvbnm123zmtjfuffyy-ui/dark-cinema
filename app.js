@@ -11,38 +11,37 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// ── منع Node من الموت بسبب أخطاء غير متوقعة ──────────────────────────────
+process.on('uncaughtException', (err) => {
+    console.error('🔴 uncaughtException:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('🔴 unhandledRejection:', reason);
+});
+
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname  = path.dirname(__filename);
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
-const app = express();
+const app  = express();
 const port = process.env.PORT || 3000;
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const UPLOAD_DIR    = path.join(__dirname, 'uploads');
 const PROCESSED_DIR = path.join(__dirname, 'processed');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-if (!fs.existsSync(PROCESSED_DIR)) fs.mkdirSync(PROCESSED_DIR, { recursive: true });
+[UPLOAD_DIR, PROCESSED_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`)
+    filename:    (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`)
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 * 1024 } });
 
-// ─── جلب مدة الفيديو ─────────────────────────────────────────────────────────
-const getVideoDuration = (filePath) => {
-    return new Promise((resolve) => {
-        ffmpeg.ffprobe(filePath, (err, metadata) => {
-            if (err || !metadata?.format?.duration) {
-                resolve(0);
-            } else {
-                resolve(parseFloat(metadata.format.duration));
-            }
-        });
-    });
-};
+// ─── جلب مدة الفيديو ─────────────────────────────────────────────────────
+const getVideoDuration = (filePath) => new Promise((resolve) => {
+    ffmpeg.ffprobe(filePath, (err, meta) => resolve(err ? 0 : parseFloat(meta?.format?.duration ?? 0)));
+});
 
-// ─── تحويل HLS مع تتبع التقدم ───────────────────────────────────────────────
+// ─── تحويل HLS ────────────────────────────────────────────────────────────
 const convertToHls = async (inputPath, outputDir, onProgress) => {
     const duration = await getVideoDuration(inputPath);
     console.log(`[ffmpeg] مدة الفيديو: ${duration.toFixed(1)}s`);
@@ -51,24 +50,16 @@ const convertToHls = async (inputPath, outputDir, onProgress) => {
         const outputPlaylist = path.join(outputDir, 'output.m3u8');
         ffmpeg(inputPath)
             .outputOptions([
-                '-c:v libx264',          // إعادة ترميز الفيديو — يدعم التقدم والـ HLS
-                '-c:a aac',              // إعادة ترميز الصوت
-                '-preset ultrafast',     // أسرع تحويل على Render
-                '-crf 23',              // جودة متوازنة
-                '-g 48',                // keyframe كل 48 فريم (مهم للـ HLS)
-                '-sc_threshold 0',      // لا تقطع إلا على الـ keyframes
-                '-hls_time 6',
-                '-hls_list_size 0',
+                '-c:v libx264', '-c:a aac',
+                '-preset ultrafast', '-crf 23',
+                '-g 48', '-sc_threshold 0',
+                '-hls_time 6', '-hls_list_size 0',
                 '-hls_segment_type mpegts',
-                '-start_number 0',
-                '-f hls'
+                '-start_number 0', '-f hls'
             ])
             .output(outputPlaylist)
             .on('stderr', (line) => {
-                // سجّل أخطاء ffmpeg الفعلية لتسهيل التشخيص
-                if (line.includes('Error') || line.includes('error') || line.includes('Invalid')) {
-                    console.error('[ffmpeg stderr]', line);
-                }
+                if (/error|invalid/i.test(line)) console.error('[ffmpeg stderr]', line);
             })
             .on('progress', (progress) => {
                 if (!onProgress) return;
@@ -76,18 +67,14 @@ const convertToHls = async (inputPath, outputDir, onProgress) => {
                 if (progress.percent != null && progress.percent > 0) {
                     pct = Math.min(Math.round(progress.percent), 99);
                 } else if (duration > 0 && progress.timemark) {
-                    // حساب بديل عبر timemark لو percent فارغ
-                    const parts = progress.timemark.split(':');
-                    const secs = (+parts[0]) * 3600 + (+parts[1]) * 60 + parseFloat(parts[2]);
+                    const [h, m, s] = progress.timemark.split(':');
+                    const secs = +h * 3600 + +m * 60 + parseFloat(s);
                     pct = Math.min(Math.round((secs / duration) * 100), 99);
                 }
                 onProgress(pct);
             })
-            .on('end', () => resolve(outputPlaylist))
-            .on('error', (err) => {
-                console.error('[ffmpeg] error:', err.message);
-                reject(err);
-            })
+            .on('end',   () => resolve(outputPlaylist))
+            .on('error', (err) => { console.error('[ffmpeg error]', err.message); reject(err); })
             .run();
     });
 };
@@ -96,77 +83,86 @@ app.use(express.static(__dirname));
 app.use(express.json());
 app.use('/processed', express.static(PROCESSED_DIR));
 
-// ─── Health Check ──────────────────────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date().toISOString() }));
+// ─── Health ───────────────────────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'OK', time: new Date().toISOString() }));
+
+// ─── تشخيص البث ───────────────────────────────────────────────────────────
+app.get('/api/debug', async (req, res) => {
+    try {
+        const status = getStatus();
+        const ffmpegPath = ffmpegStatic;
+        const ffmpegExists = fs.existsSync(ffmpegPath);
+        const processedFiles = fs.existsSync(PROCESSED_DIR)
+            ? fs.readdirSync(PROCESSED_DIR).slice(0, 5)
+            : [];
+        res.json({
+            status,
+            ffmpegPath,
+            ffmpegExists,
+            processedFiles,
+            env: {
+                hasToken:   !!process.env.DISCORD_TOKEN,
+                hasGuild:   !!process.env.GUILD_ID,
+                hasChannel: !!process.env.CHANNEL_ID,
+            }
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // ─── رفع عادي ─────────────────────────────────────────────────────────────
 app.post('/upload', upload.single('video'), async (req, res) => {
     if (!req.file) return res.status(400).json({ success: false, error: 'No file' });
-
     const videoPath = req.file.path;
-    const videoId = path.parse(req.file.filename).name;
+    const videoId   = path.parse(req.file.filename).name;
     const outputDir = path.join(PROCESSED_DIR, videoId);
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-
     try {
         await convertToHls(videoPath, outputDir);
         fs.unlink(videoPath, () => {});
         res.json({ success: true, videoUrl: `/processed/${videoId}/output.m3u8`, videoId });
     } catch (err) {
-        console.error('[upload] ffmpeg error:', err.message);
         fs.unlink(videoPath, () => {});
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ─── رفع + SSE للتقدم الحي ────────────────────────────────────────────────
+// ─── رفع + SSE ────────────────────────────────────────────────────────────
 app.post('/upload-stream', upload.single('video'), async (req, res) => {
     if (!req.file) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: false, error: 'No file' }));
     }
-
     res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'   // ← مهم على Render/nginx
+        'Content-Type':   'text/event-stream',
+        'Cache-Control':  'no-cache',
+        'Connection':     'keep-alive',
+        'X-Accel-Buffering': 'no'
     });
-
-    const send = (data) => {
-        try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
-    };
+    const send = (data) => { try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {} };
 
     const videoPath = req.file.path;
-    const videoId = path.parse(req.file.filename).name;
+    const videoId   = path.parse(req.file.filename).name;
     const outputDir = path.join(PROCESSED_DIR, videoId);
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
     send({ stage: 'converting', percent: 0, message: 'جاري التحويل...' });
-
     try {
-        await convertToHls(videoPath, outputDir, (percent) => {
-            send({ stage: 'converting', percent, message: `تحويل: ${percent}%` });
+        await convertToHls(videoPath, outputDir, (pct) => {
+            send({ stage: 'converting', percent: pct, message: `تحويل: ${pct}%` });
         });
-
         fs.unlink(videoPath, () => {});
-        send({
-            stage: 'done',
-            percent: 100,
-            message: 'اكتمل!',
-            videoUrl: `/processed/${videoId}/output.m3u8`,
-            videoId
-        });
+        send({ stage: 'done', percent: 100, message: 'اكتمل!',
+               videoUrl: `/processed/${videoId}/output.m3u8`, videoId });
     } catch (err) {
-        console.error('[upload-stream] ffmpeg error:', err.message);
         fs.unlink(videoPath, () => {});
         send({ stage: 'error', message: err.message });
     }
-
     res.end();
 });
 
-// ─── بدء البث ──────────────────────────────────────────────────────────────
+// ─── بدء البث ─────────────────────────────────────────────────────────────
 app.post('/api/start', async (req, res) => {
     try {
         const { videoUrl, videoId } = req.body;
@@ -175,7 +171,7 @@ app.post('/api/start', async (req, res) => {
             return res.status(400).json({ success: false, message: 'لا يوجد رابط فيديو' });
         }
 
-        // نمرر مسار الملف مباشرة — Render لا يسمح بـ HTTP للسيرفر نفسه
+        // مسار الملف الحقيقي على الديسك بدل HTTP داخلي
         let streamTarget;
         if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
             streamTarget = videoUrl;
@@ -192,15 +188,15 @@ app.post('/api/start', async (req, res) => {
         }
 
         const result = await startStream(streamTarget, processedDir);
-
         return res.json(result);
+
     } catch (err) {
-        console.error('[/api/start] unexpected error:', err.message);
+        console.error('[/api/start] error:', err.message, err.stack);
         return res.status(500).json({ success: false, message: err.message });
     }
 });
 
-// ─── إيقاف البث ────────────────────────────────────────────────────────────
+// ─── إيقاف البث ───────────────────────────────────────────────────────────
 app.post('/api/stop', async (req, res) => {
     try {
         const result = await stopStream();
@@ -211,7 +207,7 @@ app.post('/api/stop', async (req, res) => {
     }
 });
 
-// ─── حالة البث ─────────────────────────────────────────────────────────────
+// ─── حالة البث ────────────────────────────────────────────────────────────
 app.get('/api/status', (req, res) => {
     try {
         return res.json(getStatus());
@@ -220,15 +216,16 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// ─── معالج أخطاء Multer والـ Global ───────────────────────────────────────
+// ─── Global Error Handler ─────────────────────────────────────────────────
 app.use((err, req, res, next) => {
+    console.error('[express error]', err.message);
     if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(413).json({ success: false, error: 'الملف أكبر من الحد المسموح (5GB)' });
+        return res.status(413).json({ success: false, error: 'الملف أكبر من 5GB' });
     }
-    console.error('[global error]', err.message);
     return res.status(500).json({ success: false, error: err.message });
 });
 
 app.listen(port, '0.0.0.0', () => {
-    console.log(`🚀 Dark Cinema running on port ${port}`);
+    console.log(`🚀 Dark Cinema on port ${port}`);
+    console.log(`🔍 Debug: http://localhost:${port}/api/debug`);
 });
