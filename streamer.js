@@ -1,5 +1,5 @@
 import { Client } from "djs-selfbot-v13";
-import { Streamer, prepareStream, playStream, Encoders } from '@dank074/discord-video-stream';
+import { Streamer, prepareStream, playStream, Utils } from '@dank074/discord-video-stream';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
@@ -10,28 +10,26 @@ let streamer = null;
 let isStreaming = false;
 let isReady = false;
 let currentProcessedDir = null;
+let activeCommand = null;
 let initPromise = null;
 
 // ─── تهيئة الكلاينت ────────────────────────────────────────────────────────
 async function initClient() {
-    // لو الكلاينت شغال بالفعل ارجع مباشرة
     if (client && isReady) return true;
-
-    // لو في عملية تهيئة قائمة انتظرها بدل ما تشغل واحدة ثانية
     if (initPromise) return initPromise;
 
     initPromise = new Promise((resolve, reject) => {
         const token = process.env.DISCORD_TOKEN;
         if (!token) {
             initPromise = null;
-            return reject(new Error('DISCORD_TOKEN غير موجود في ملف .env'));
+            return reject(new Error('DISCORD_TOKEN غير موجود في .env'));
         }
 
         client = new Client({ checkUpdate: false });
+        streamer = new Streamer(client);
 
         client.once('ready', () => {
-            console.log(`✅ Discord: تم تسجيل الدخول باسم ${client.user.tag}`);
-            streamer = new Streamer(client);
+            console.log(`✅ Discord: تم الدخول باسم ${client.user.tag}`);
             isReady = true;
             initPromise = null;
             resolve(true);
@@ -49,9 +47,8 @@ async function initClient() {
         });
 
         client.login(token).catch((err) => {
-            console.error('❌ فشل تسجيل الدخول:', err.message);
-            isReady = false;
             initPromise = null;
+            isReady = false;
             reject(new Error(`فشل تسجيل الدخول: ${err.message}`));
         });
     });
@@ -59,10 +56,8 @@ async function initClient() {
     return initPromise;
 }
 
-// تهيئة عند تشغيل السيرفر
-initClient().catch((err) => {
-    console.error('⚠️ التهيئة المبدئية فشلت:', err.message);
-});
+// تهيئة عند بدء السيرفر
+initClient().catch((err) => console.error('⚠️ التهيئة الأولية:', err.message));
 
 // ─── بدء البث ──────────────────────────────────────────────────────────────
 export async function startStream(videoUrl, processedDir) {
@@ -73,82 +68,94 @@ export async function startStream(videoUrl, processedDir) {
         return { success: false, message: 'لا يوجد رابط فيديو' };
     }
 
-    // تحقق من متغيرات البيئة
-    const guildId = process.env.GUILD_ID;
+    const guildId   = process.env.GUILD_ID;
     const channelId = process.env.CHANNEL_ID;
 
     if (!guildId || !channelId) {
-        return { success: false, message: 'GUILD_ID أو CHANNEL_ID غير موجودين في .env' };
+        return { success: false, message: 'GUILD_ID أو CHANNEL_ID غير موجودان في .env' };
     }
 
     try {
-        // إعادة الاتصال لو انقطع
+        // إعادة اتصال لو انقطع
         if (!isReady) {
             console.log('🔄 إعادة تهيئة الاتصال...');
             await initClient();
         }
 
-        // تحقق من السيرفر
         const guild = client.guilds.cache.get(guildId);
         if (!guild) {
-            return { success: false, message: `السيرفر غير موجود. تأكد من GUILD_ID: ${guildId}` };
+            return { success: false, message: `السيرفر غير موجود (GUILD_ID: ${guildId})` };
         }
 
-        // تحقق من الروم
         const channel = guild.channels.cache.get(channelId);
         if (!channel) {
-            return { success: false, message: `الروم غير موجود. تأكد من CHANNEL_ID: ${channelId}` };
+            return { success: false, message: `الروم غير موجود (CHANNEL_ID: ${channelId})` };
         }
         if (!channel.isVoice()) {
-            return { success: false, message: `الروم "${channel.name}" ليس روماً صوتياً` };
+            return { success: false, message: `"${channel.name}" ليس روماً صوتياً` };
         }
 
         console.log(`🎧 الانضمام إلى: ${channel.name}`);
         await streamer.joinVoice(guildId, channelId);
 
-        console.log(`🎬 تجهيز البث من: ${videoUrl}`);
+        console.log(`🎬 تجهيز البث: ${videoUrl}`);
 
-        const encoder = Encoders.software({ x264: { preset: 'ultrafast' } });
-
-        let streamOutput;
+        // ── الـ API الصحيح لـ @dank074/discord-video-stream ──
+        let command, output;
         try {
             const prepared = prepareStream(videoUrl, {
-                encoder,
-                height: 720,
-                frameRate: 30,
-                bitrateVideo: 2500,
-                videoCodec: 'H264'
+                videoCodec:    Utils.normalizeVideoCodec('H264'),
+                h26xPreset:    'ultrafast',
+                height:        720,
+                frameRate:     30,
+                bitrateVideo:  2500,
+                bitrateVideoMax: 3000,
+                includeAudio:  true,
             });
-            streamOutput = prepared?.output;
+            command = prepared.command;
+            output  = prepared.output;
         } catch (prepErr) {
-            console.error('❌ فشل prepareStream:', prepErr.message);
+            console.error('❌ prepareStream فشل:', prepErr.message);
             return { success: false, message: `فشل تجهيز الستريم: ${prepErr.message}` };
         }
 
-        if (!streamOutput) {
-            return { success: false, message: 'فشل تجهيز الستريم — output فارغ. تحقق من الفيديو والـ ffmpeg' };
+        if (!output) {
+            return { success: false, message: 'فشل تجهيز الستريم — output فارغ' };
         }
 
+        // ── مهم: أضف معالج أخطاء ffmpeg وإلا يصمت ──
+        command.on('error', (err, stdout, stderr) => {
+            console.error('❌ ffmpeg error:', err.message);
+            console.error('ffmpeg stderr:', stderr);
+            isStreaming = false;
+            activeCommand = null;
+            cleanup(currentProcessedDir);
+        });
+
+        activeCommand  = command;
         currentProcessedDir = processedDir;
         isStreaming = true;
 
-        playStream(streamOutput, streamer, { type: 'go-live' })
+        // playStream لا ينتظر — يعمل في الخلفية
+        playStream(output, streamer, { type: 'go-live' })
             .then(() => {
                 console.log('✅ انتهى الفيديو.');
                 isStreaming = false;
-                cleanup();
+                activeCommand = null;
+                cleanup(currentProcessedDir);
             })
             .catch((err) => {
                 console.error('❌ خطأ أثناء البث:', err.message);
                 isStreaming = false;
-                cleanup();
+                activeCommand = null;
+                cleanup(currentProcessedDir);
             });
 
-        console.log('🎥 بدأ البث المباشر!');
-        return { success: true, message: 'تم بدء البث بنجاح 🎥' };
+        console.log('🎥 بدأ البث!');
+        return { success: true, message: '🎥 بدأ البث بنجاح!' };
 
     } catch (error) {
-        console.error('❌ فشل البث:', error.message);
+        console.error('❌ startStream error:', error.message);
         isStreaming = false;
         return { success: false, message: error.message };
     }
@@ -156,32 +163,36 @@ export async function startStream(videoUrl, processedDir) {
 
 // ─── إيقاف البث ────────────────────────────────────────────────────────────
 export async function stopStream() {
-    if (!isStreaming) {
+    if (!isStreaming && !activeCommand) {
         return { success: false, message: 'لا يوجد بث نشط' };
     }
     try {
+        // أوقف ffmpeg أولاً
+        if (activeCommand) {
+            try { activeCommand.kill('SIGKILL'); } catch {}
+            activeCommand = null;
+        }
+        // ثم أوقف الستريم
         streamer.stopStream();
         isStreaming = false;
-        cleanup();
-        console.log('🛑 تم إيقاف البث');
-        return { success: true, message: 'تم إيقاف البث' };
+        cleanup(currentProcessedDir);
+        return { success: true, message: '🛑 تم إيقاف البث' };
     } catch (error) {
-        console.error('❌ خطأ في الإيقاف:', error.message);
         isStreaming = false;
         return { success: false, message: error.message };
     }
 }
 
 // ─── حذف الملفات المؤقتة ───────────────────────────────────────────────────
-function cleanup() {
-    if (currentProcessedDir && fs.existsSync(currentProcessedDir)) {
+function cleanup(dir) {
+    currentProcessedDir = null;
+    if (dir && fs.existsSync(dir)) {
         try {
-            fs.rmSync(currentProcessedDir, { recursive: true, force: true });
-            console.log(`🗑️ تم حذف: ${currentProcessedDir}`);
-        } catch (err) {
-            console.warn('⚠️ فشل حذف الملفات المؤقتة:', err.message);
+            fs.rmSync(dir, { recursive: true, force: true });
+            console.log(`🗑️ حُذف: ${dir}`);
+        } catch (e) {
+            console.warn('⚠️ فشل الحذف:', e.message);
         }
-        currentProcessedDir = null;
     }
 }
 
