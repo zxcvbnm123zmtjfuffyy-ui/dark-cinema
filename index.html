@@ -48,10 +48,7 @@
         .upload-text { font-size: 0.95rem; opacity: 0.8; }
 
         /* Progress */
-        .progress-wrap {
-            display: none;
-            margin-bottom: 1.2rem;
-        }
+        .progress-wrap { display: none; margin-bottom: 1.2rem; }
         .progress-wrap.visible { display: block; }
         .progress-header {
             display: flex;
@@ -97,7 +94,6 @@
             padding: 0.75rem 1rem;
             margin-bottom: 1.2rem;
             font-size: 0.82rem;
-            opacity: 0.7;
             display: none;
         }
         .video-info.visible { display: block; opacity: 1; }
@@ -212,7 +208,6 @@
     let currentVideoUrl = null;
     let currentVideoId = null;
     let stalledTimer = null;
-    let lastPercent = 0;
 
     // ───── Logging ─────
     function log(msg, type = '') {
@@ -246,9 +241,8 @@
         fill.style.width = percent + '%';
         fill.className = 'progress-bar-fill' + (state ? ' ' + state : '');
 
-        // كشف التوقف — لو ما تغير الـ% خلال 30 ثانية
         clearTimeout(stalledTimer);
-        if (percent < 100 && percent > 0) {
+        if (percent > 0 && percent < 100) {
             stalledTimer = setTimeout(() => {
                 document.getElementById('stalledMsg').style.display = 'block';
                 log('⚠️ يبدو أن التحويل توقف', 'warn');
@@ -258,7 +252,7 @@
         }
     }
 
-    // ───── Upload with SSE progress ─────
+    // ───── Upload ─────
     document.getElementById('uploadArea').onclick = () => {
         if (!document.getElementById('uploadArea').classList.contains('disabled'))
             document.getElementById('fileInput').click();
@@ -287,7 +281,6 @@
         const sizeMB = (file.size / 1024 / 1024).toFixed(1);
         log(`📁 ${file.name} — ${sizeMB} MB`);
 
-        // إعداد الواجهة
         currentVideoUrl = null;
         currentVideoId = null;
         document.getElementById('startBtn').disabled = true;
@@ -297,24 +290,20 @@
         setProgress(0, 'جاري رفع الملف...', '');
         document.getElementById('stalledMsg').style.display = 'none';
 
-        // رفع الملف
         const xhr = new XMLHttpRequest();
         const formData = new FormData();
         formData.append('video', file);
 
-        let uploadDone = false;
-
-        // تقدم الرفع
+        // تقدم الرفع (0 → 40%)
         xhr.upload.onprogress = (e) => {
             if (!e.lengthComputable) return;
-            const pct = Math.round((e.loaded / e.total) * 40); // الرفع = 0→40%
+            const pct = Math.round((e.loaded / e.total) * 40);
             const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
             const totalMB = (e.total / 1024 / 1024).toFixed(1);
-            setProgress(pct, `رفع الملف...`, `${uploadedMB} / ${totalMB} MB`);
+            setProgress(pct, 'رفع الملف...', `${uploadedMB} / ${totalMB} MB`);
         };
 
         xhr.upload.onload = () => {
-            uploadDone = true;
             setProgress(40, 'جاري التحويل إلى HLS...', 'هذا قد يأخذ وقتاً حسب حجم الفيديو');
             log('✅ اكتمل الرفع، جاري التحويل...');
         };
@@ -326,7 +315,7 @@
             showProgress(false);
         };
 
-        // معالجة استجابة SSE
+        // ── معالجة SSE ──
         let buffer = '';
         xhr.onreadystatechange = () => {
             if (xhr.readyState >= 3) {
@@ -338,7 +327,6 @@
                     try {
                         const data = JSON.parse(line.slice(6));
                         if (data.stage === 'converting') {
-                            // 40% رفع + 60% تحويل
                             const total = 40 + Math.round(data.percent * 0.6);
                             setProgress(total, `تحويل: ${data.percent}%`, 'جاري تحويل الفيديو إلى HLS...');
                         } else if (data.stage === 'done') {
@@ -359,9 +347,15 @@
                             log(`❌ ${data.message}`, 'error');
                             document.getElementById('uploadArea').classList.remove('disabled');
                         }
-                    } catch {}
+                    } catch (_) { /* تجاهل أسطر ناقصة */ }
                 }
             }
+        };
+
+        xhr.onerror = () => {
+            log('❌ انقطع الاتصال بالسيرفر أثناء الرفع', 'error');
+            document.getElementById('uploadArea').classList.remove('disabled');
+            showProgress(false);
         };
 
         xhr.open('POST', '/upload-stream');
@@ -375,13 +369,27 @@
         setStatus('جاري الاتصال...', 'connecting');
         document.getElementById('startBtn').disabled = true;
         document.getElementById('stopBtn').disabled = false;
+
         try {
             const res = await fetch('/api/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ videoUrl: currentVideoUrl, videoId: currentVideoId })
             });
-            const data = await res.json();
+
+            // ── هنا كان الخطأ الأصلي: نتحقق من الـ status قبل .json() ──
+            const text = await res.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch {
+                log(`❌ رد غير متوقع من السيرفر: ${text.slice(0, 100)}`, 'error');
+                setStatus('خطأ في السيرفر');
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                return;
+            }
+
             if (data.success) {
                 log('🎥 ' + data.message, 'success');
                 setStatus('يبث الآن', 'live');
@@ -392,8 +400,10 @@
                 document.getElementById('stopBtn').disabled = true;
             }
         } catch (e) {
-            log('❌ خطأ: ' + e.message, 'error');
+            log('❌ خطأ في الاتصال: ' + e.message, 'error');
+            setStatus('خطأ في الاتصال');
             document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
         }
     };
 
@@ -401,37 +411,47 @@
         log('⏹ إيقاف البث...');
         try {
             const res = await fetch('/api/stop', { method: 'POST' });
-            const data = await res.json();
+            const text = await res.text();
+            let data;
+            try { data = JSON.parse(text); } catch { data = { success: false, message: text }; }
             log(data.success ? '🛑 ' + data.message : '⚠️ ' + data.message,
                 data.success ? 'warn' : 'error');
         } catch (e) {
             log('❌ ' + e.message, 'error');
         }
         setStatus('متوقف');
-        document.getElementById('startBtn').disabled = false;
+        document.getElementById('startBtn').disabled = !currentVideoUrl;
         document.getElementById('stopBtn').disabled = true;
-        updateStatus();
     };
 
     // ───── Status Polling ─────
     async function updateStatus() {
         try {
             const res = await fetch('/api/status');
-            const data = await res.json();
+            if (!res.ok) return;
+            const text = await res.text();
+            let data;
+            try { data = JSON.parse(text); } catch { return; }
+
             if (data.isStreaming) {
                 setStatus('يبث الآن', 'live');
                 document.getElementById('stopBtn').disabled = false;
             } else if (!data.isReady) {
                 setStatus('جاري تهيئة الاتصال...', 'connecting');
             } else {
-                if (document.getElementById('statusDot').className.includes('live')) {
+                const dot = document.getElementById('statusDot');
+                if (dot.className.includes('live')) {
                     setStatus('انتهى الفيديو');
                     log('✅ انتهى الفيديو تلقائياً', 'success');
-                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('startBtn').disabled = !currentVideoUrl;
                     document.getElementById('stopBtn').disabled = true;
+                } else if (!dot.className.includes('connecting')) {
+                    // عرض اسم المستخدم لو موجود
+                    const userTag = data.user ? ` (${data.user})` : '';
+                    setStatus(`متصل${userTag}`, '');
                 }
             }
-        } catch {}
+        } catch { /* صمت في حالة انقطاع مؤقت */ }
     }
 
     setInterval(updateStatus, 4000);
