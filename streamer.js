@@ -1,3 +1,6 @@
+import { WebSocket } from "ws";
+global.WebSocket = WebSocket; // Node 20 لا يعرّفها تلقائياً
+
 import { Client } from "djs-selfbot-v13";
 import { Streamer, prepareStream, playStream, Utils } from '@dank074/discord-video-stream';
 import dotenv from 'dotenv';
