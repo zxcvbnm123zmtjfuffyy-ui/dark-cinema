@@ -19,25 +19,19 @@ export async function startStream(videoUrl, retryCount = 0) {
         console.log("⚠️ البث قيد التشغيل بالفعل");
         return { success: false, message: "البث قيد التشغيل" };
     }
-
     if (!videoUrl) {
         console.error("❌ لا يوجد رابط فيديو");
         return { success: false, message: "لا يوجد رابط فيديو" };
     }
-
     console.log(`🎬 بدء البث من: ${videoUrl}`);
-
     try {
         const streamer = new Streamer(new Client());
         currentStreamer = streamer;
-
         await streamer.client.login(process.env.DISCORD_TOKEN);
         await new Promise((resolve) => streamer.client.once('ready', resolve));
         console.log(`✅ تم تسجيل الدخول باسم: ${streamer.client.user.tag}`);
-
         await streamer.joinVoice(process.env.GUILD_ID, process.env.CHANNEL_ID);
         console.log(`🎧 تم الانضمام إلى الروم الصوتي (ID: ${process.env.CHANNEL_ID})`);
-
         const encoder = Encoders.software({ x264: { preset: "veryfast" } });
         const { output } = prepareStream(videoUrl, {
             encoder: encoder,
@@ -47,18 +41,16 @@ export async function startStream(videoUrl, retryCount = 0) {
             videoCodec: Utils.normalizeVideoCodec("H264"),
             h26xPreset: "veryfast"
         });
-
         await playStream(output, streamer, { type: "go-live" });
         isStreaming = true;
         currentVideoUrl = videoUrl;
         console.log("🎥 بدأ البث المباشر بنجاح!");
         return { success: true, message: "تم بدء البث" };
-
     } catch (error) {
         logError("startStream", error);
         if (retryCount < MAX_RETRIES) {
             console.log(`🔄 إعادة محاولة البث (${retryCount + 1}/${MAX_RETRIES})...`);
-            await new Promise(resolve => setTimeout(resolve, 3000)); // تأخير 3 ثوانٍ
+            await new Promise(resolve => setTimeout(resolve, 3000));
             return startStream(videoUrl, retryCount + 1);
         } else {
             try {
@@ -81,7 +73,6 @@ export async function stopStream() {
         console.log("⚠️ لا يوجد بث نشط");
         return { success: false, message: "لا يوجد بث نشط" };
     }
-
     console.log("🛑 إيقاف البث...");
     try {
         await currentStreamer.stopStream().catch(() => {});
@@ -99,8 +90,5 @@ export async function stopStream() {
 }
 
 export function getStatus() {
-    return {
-        isStreaming,
-        videoUrl: currentVideoUrl
-    };
+    return { isStreaming, videoUrl: currentVideoUrl };
 }

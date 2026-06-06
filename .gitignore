@@ -1,6 +1,6 @@
 .env
 node_modules/
 uploads/
-processed_videos/
+processed/
 *.log
 .DS_Store
