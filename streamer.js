@@ -8,15 +8,15 @@ import fs from 'fs';
 
 dotenv.config();
 
-let client   = null;
-let streamer  = null;
-let isStreaming      = false;
-let isReady          = false;
-let currentFilePath  = null;
-let activeCommand    = null;
-let initPromise      = null;
+let client          = null;
+let streamer        = null;
+let isStreaming     = false;
+let isReady         = false;
+let currentFilePath = null;
+let activeCommand   = null;
+let initPromise     = null;
 
-// ─── تهيئة الكلاينت ────────────────────────────────────────────────────────
+// ─── تهيئة الكلاينت (مرة واحدة فقط طول عمر السيرفر) ──────────────────────
 async function initClient() {
     if (client && isReady) return true;
     if (initPromise) return initPromise;
@@ -40,6 +40,7 @@ async function initClient() {
         });
         client.on('error',      (e) => { console.error('❌ Discord:', e.message); isReady = false; });
         client.on('disconnect', ()  => { console.warn('⚠️ انقطع'); isReady = false; isStreaming = false; });
+
         client.login(token).catch((e) => {
             initPromise = null; isReady = false;
             reject(new Error(`فشل تسجيل الدخول: ${e.message}`));
@@ -55,13 +56,13 @@ initClient().catch((e) => console.error('⚠️ init:', e.message));
 export async function startStream(filePath, fileId) {
     console.log(`[startStream] filePath=${filePath}`);
 
-    if (isStreaming)           return { success: false, message: 'البث قيد التشغيل بالفعل' };
-    if (!filePath)             return { success: false, message: 'لا يوجد مسار فيديو' };
+    if (isStreaming)              return { success: false, message: 'البث قيد التشغيل بالفعل' };
+    if (!filePath)                return { success: false, message: 'لا يوجد مسار فيديو' };
     if (!fs.existsSync(filePath)) return { success: false, message: `الملف غير موجود: ${filePath}` };
 
     const guildId   = process.env.GUILD_ID;
     const channelId = process.env.CHANNEL_ID;
-    if (!guildId || !channelId) return { success: false, message: 'GUILD_ID أو CHANNEL_ID مفقودان' };
+    if (!guildId || !channelId)   return { success: false, message: 'GUILD_ID أو CHANNEL_ID مفقودان' };
 
     try {
         if (!isReady) { console.log('🔄 إعادة الاتصال...'); await initClient(); }
@@ -73,13 +74,20 @@ export async function startStream(filePath, fileId) {
         if (!channel)           return { success: false, message: `الروم غير موجود: ${channelId}` };
         if (!channel.isVoice()) return { success: false, message: `"${channel.name}" ليس روماً صوتياً` };
 
+        // ── نظّف الحالة القديمة قبل البدء ──────────────────────────────────
+        // هذا يحل مشكلة "جاري الاتصال للأبد" بعد أول بث
+        try {
+            streamer.leaveVoice();
+            console.log('🔄 خرج من الروم القديم');
+        } catch {}
+        // انتظر لحظة قبل الانضمام من جديد
+        await new Promise(r => setTimeout(r, 1000));
+
         console.log(`🎧 الانضمام: ${channel.name}`);
         await streamer.joinVoice(guildId, channelId);
-        console.log('✅ انضم للروم، جاري تجهيز البث...');
+        console.log('✅ انضم للروم');
 
-        // ── الـ API الصحيح حسب الـ README الرسمي ──────────────────────────
-        // Encoders.software يتحكم في معدل الإرسال — بدونه ffmpeg يرسل كل
-        // الـ frames دفعة واحدة فيقطع Discord الاتصال فوراً
+        // ── prepareStream بالـ API الصحيح ──────────────────────────────────
         const encoder = Encoders.software({
             x264: { preset: 'ultrafast' },
             x265: { preset: 'ultrafast' }
@@ -97,13 +105,21 @@ export async function startStream(filePath, fileId) {
             });
             command = prepared.command;
             output  = prepared.output;
-            console.log('✅ prepareStream نجح');
         } catch (e) {
             console.error('❌ prepareStream:', e.message);
             return { success: false, message: `prepareStream فشل: ${e.message}` };
         }
 
         if (!output) return { success: false, message: 'output فارغ من prepareStream' };
+
+        // ── الإصلاح الرئيسي: -re يجبر ffmpeg يقرأ بسرعة الفيديو الحقيقية ──
+        // بدونه يقرأ الملف بأقصى سرعة CPU فيرسل 6 دقائق في ثواني
+        try {
+            command.inputOption('-re');
+            console.log('✅ -re flag مضاف (قراءة بسرعة الفيديو الطبيعية)');
+        } catch (e) {
+            console.warn('⚠️ فشل إضافة -re:', e.message);
+        }
 
         command.on('error', (err, stdout, stderr) => {
             console.error('❌ ffmpeg error:', err.message);
@@ -112,22 +128,26 @@ export async function startStream(filePath, fileId) {
             deleteFile(currentFilePath);
         });
 
-        command.on('start', (cmd) => console.log('[ffmpeg] بدأ:', cmd.slice(0, 100)));
+        command.on('start', (cmd) => {
+            console.log('[ffmpeg] بدأ — أول 100 حرف:', cmd.slice(0, 100));
+        });
 
-        activeCommand  = command;
+        activeCommand   = command;
         currentFilePath = filePath;
-        isStreaming    = true;
+        isStreaming     = true;
 
-        // playStream تنتظر حتى ينتهي الفيديو كاملاً
         playStream(output, streamer, { type: 'go-live' })
             .then(() => {
-                console.log('✅ انتهى الفيديو.');
+                console.log('✅ انتهى الفيديو بشكل طبيعي');
                 isStreaming = false; activeCommand = null;
+                // اخرج من الروم بعد انتهاء الفيديو عشان تحضّر للجلسة القادمة
+                try { streamer.leaveVoice(); } catch {}
                 deleteFile(currentFilePath);
             })
             .catch((e) => {
                 console.error('❌ playStream error:', e.message);
                 isStreaming = false; activeCommand = null;
+                try { streamer.leaveVoice(); } catch {}
                 deleteFile(currentFilePath);
             });
 
@@ -147,6 +167,7 @@ export async function stopStream() {
         if (activeCommand) { try { activeCommand.kill('SIGKILL'); } catch {} activeCommand = null; }
         streamer.stopStream();
         isStreaming = false;
+        try { streamer.leaveVoice(); } catch {}
         deleteFile(currentFilePath);
         return { success: true, message: '🛑 تم إيقاف البث' };
     } catch (e) {
@@ -155,6 +176,7 @@ export async function stopStream() {
     }
 }
 
+// ─── حذف الملف بعد الانتهاء ────────────────────────────────────────────────
 function deleteFile(fp) {
     currentFilePath = null;
     if (fp && fs.existsSync(fp)) {
@@ -163,6 +185,7 @@ function deleteFile(fp) {
     }
 }
 
+// ─── حالة البث ─────────────────────────────────────────────────────────────
 export function getStatus() {
     return { isStreaming, isReady, user: client?.user?.tag ?? null };
 }
