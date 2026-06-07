@@ -2,17 +2,16 @@ import { WebSocket } from 'ws';
 global.WebSocket = WebSocket;
 
 import { Client } from 'djs-selfbot-v13';
-import { Streamer, prepareStream, playStream, Utils } from '@dank074/discord-video-stream';
+import { Streamer, prepareStream, playStream, Utils, Encoders } from '@dank074/discord-video-stream';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
 dotenv.config();
 
-let client    = null;
+let client   = null;
 let streamer  = null;
 let isStreaming      = false;
 let isReady          = false;
-let currentFileId    = null;
 let currentFilePath  = null;
 let activeCommand    = null;
 let initPromise      = null;
@@ -56,8 +55,8 @@ initClient().catch((e) => console.error('⚠️ init:', e.message));
 export async function startStream(filePath, fileId) {
     console.log(`[startStream] filePath=${filePath}`);
 
-    if (isStreaming) return { success: false, message: 'البث قيد التشغيل بالفعل' };
-    if (!filePath)   return { success: false, message: 'لا يوجد مسار فيديو' };
+    if (isStreaming)           return { success: false, message: 'البث قيد التشغيل بالفعل' };
+    if (!filePath)             return { success: false, message: 'لا يوجد مسار فيديو' };
     if (!fs.existsSync(filePath)) return { success: false, message: `الملف غير موجود: ${filePath}` };
 
     const guildId   = process.env.GUILD_ID;
@@ -71,38 +70,34 @@ export async function startStream(filePath, fileId) {
         if (!guild) return { success: false, message: `السيرفر غير موجود: ${guildId}` };
 
         const channel = guild.channels.cache.get(channelId);
-        if (!channel)        return { success: false, message: `الروم غير موجود: ${channelId}` };
-        if (!channel.isVoice()) return { success: false, message: `"${channel.name}" ليس صوتياً` };
+        if (!channel)           return { success: false, message: `الروم غير موجود: ${channelId}` };
+        if (!channel.isVoice()) return { success: false, message: `"${channel.name}" ليس روماً صوتياً` };
 
         console.log(`🎧 الانضمام: ${channel.name}`);
         await streamer.joinVoice(guildId, channelId);
-        console.log('✅ انضم للروم');
+        console.log('✅ انضم للروم، جاري تجهيز البث...');
 
-        // ── تحديد codec ──
-        let videoCodec;
-        try {
-            videoCodec = Utils?.normalizeVideoCodec
-                ? Utils.normalizeVideoCodec('H264')
-                : (Utils?.VideoCodec?.H264 ?? 'H264');
-        } catch { videoCodec = 'H264'; }
-        console.log(`[debug] videoCodec=${videoCodec}`);
+        // ── الـ API الصحيح حسب الـ README الرسمي ──────────────────────────
+        // Encoders.software يتحكم في معدل الإرسال — بدونه ffmpeg يرسل كل
+        // الـ frames دفعة واحدة فيقطع Discord الاتصال فوراً
+        const encoder = Encoders.software({
+            x264: { preset: 'ultrafast' },
+            x265: { preset: 'ultrafast' }
+        });
 
-        // ── prepareStream من الملف الخام مباشرة ──
         let command, output;
         try {
             const prepared = prepareStream(filePath, {
-                width:           1280,
+                encoder,
                 height:          720,
                 frameRate:       30,
                 bitrateVideo:    2500,
                 bitrateVideoMax: 3000,
-                videoCodec,
-                h26xPreset:      'ultrafast',
-                includeAudio:    true,
+                videoCodec:      Utils.normalizeVideoCodec('H264'),
             });
             command = prepared.command;
             output  = prepared.output;
-            console.log('[debug] prepareStream نجح');
+            console.log('✅ prepareStream نجح');
         } catch (e) {
             console.error('❌ prepareStream:', e.message);
             return { success: false, message: `prepareStream فشل: ${e.message}` };
@@ -110,21 +105,20 @@ export async function startStream(filePath, fileId) {
 
         if (!output) return { success: false, message: 'output فارغ من prepareStream' };
 
-        if (command) {
-            command.on('error', (err, stdout, stderr) => {
-                console.error('❌ ffmpeg:', err.message);
-                if (stderr) console.error('stderr:', stderr.slice(-300));
-                isStreaming = false; activeCommand = null;
-                deleteFile(currentFilePath);
-            });
-            command.on('start', (cmd) => console.log('[ffmpeg] start:', cmd.slice(0, 120)));
-        }
+        command.on('error', (err, stdout, stderr) => {
+            console.error('❌ ffmpeg error:', err.message);
+            if (stderr) console.error('stderr:', stderr.slice(-400));
+            isStreaming = false; activeCommand = null;
+            deleteFile(currentFilePath);
+        });
 
-        activeCommand   = command;
+        command.on('start', (cmd) => console.log('[ffmpeg] بدأ:', cmd.slice(0, 100)));
+
+        activeCommand  = command;
         currentFilePath = filePath;
-        currentFileId   = fileId;
-        isStreaming     = true;
+        isStreaming    = true;
 
+        // playStream تنتظر حتى ينتهي الفيديو كاملاً
         playStream(output, streamer, { type: 'go-live' })
             .then(() => {
                 console.log('✅ انتهى الفيديو.');
@@ -132,7 +126,7 @@ export async function startStream(filePath, fileId) {
                 deleteFile(currentFilePath);
             })
             .catch((e) => {
-                console.error('❌ playStream:', e.message);
+                console.error('❌ playStream error:', e.message);
                 isStreaming = false; activeCommand = null;
                 deleteFile(currentFilePath);
             });
@@ -161,9 +155,8 @@ export async function stopStream() {
     }
 }
 
-// ─── حذف الفيديو بعد الانتهاء ─────────────────────────────────────────────
 function deleteFile(fp) {
-    currentFilePath = null; currentFileId = null;
+    currentFilePath = null;
     if (fp && fs.existsSync(fp)) {
         try { fs.unlinkSync(fp); console.log(`🗑️ حُذف: ${fp}`); }
         catch (e) { console.warn('⚠️ فشل الحذف:', e.message); }
