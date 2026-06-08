@@ -3,32 +3,72 @@ global.WebSocket = WebSocket;
 
 import { Client } from 'djs-selfbot-v13';
 import { Streamer, prepareStream, playStream, Utils, Encoders } from '@dank074/discord-video-stream';
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegStatic from 'ffmpeg-static';
-import { PassThrough } from 'stream';
+import { Transform } from 'stream';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
 dotenv.config();
-ffmpeg.setFfmpegPath(ffmpegStatic);
 
-let client            = null;
-let streamer          = null;
-let isStreaming       = false;
-let isReady           = false;
-let currentFilePath   = null;
-let activeCommand     = null;   // ffmpeg الرئيسي (prepareStream)
-let preProcessCmd     = null;   // ffmpeg التمهيدي (-re)
-let initPromise       = null;
+// ─── ByteRateThrottle ──────────────────────────────────────────────────────
+// المشكلة: playStream ترسل كل البيانات دفعة واحدة لـ Discord
+// الحل:    نقسم كل chunk إلى قطع صغيرة (8KB) ونرسلها بتوقيت منتظم
+// مثال:    450KB/s مع قطع 8KB = قطعة كل ~17ms ≈ إيقاع 30fps
+class ByteRateThrottle extends Transform {
+    constructor(bytesPerSecond) {
+        super();
+        this.bps       = bytesPerSecond;
+        this.startTime = null;
+        this.total     = 0;
+        this.PIECE     = 8 * 1024; // 8KB قطعة
+    }
 
-// ─── تهيئة ─────────────────────────────────────────────────────────────────
+    _transform(chunk, enc, cb) {
+        if (!this.startTime) this.startTime = Date.now();
+
+        // قسّم الـ chunk الكبير إلى قطع 8KB
+        const pieces = [];
+        for (let i = 0; i < chunk.length; i += this.PIECE) {
+            pieces.push(chunk.slice(i, Math.min(i + this.PIECE, chunk.length)));
+        }
+
+        let idx = 0;
+        const sendNext = () => {
+            if (idx >= pieces.length) { cb(); return; }
+            const piece = pieces[idx++];
+            this.total += piece.length;
+
+            const targetMs = (this.total / this.bps) * 1000;
+            const elapsed  = Date.now() - this.startTime;
+            const delay    = Math.max(0, targetMs - elapsed);
+
+            setTimeout(() => { this.push(piece); sendNext(); }, delay);
+        };
+        sendNext();
+    }
+
+    _flush(cb) { cb(); }
+}
+
+let client         = null;
+let streamer       = null;
+let isStreaming    = false;
+let isReady        = false;
+let currentFile    = null;
+let activeCommand  = null;
+let activeThrottle = null;
+let initPromise    = null;
+
+// ─── تهيئة الكلاينت (مرة واحدة طول عمر السيرفر) ──────────────────────────
 async function initClient() {
     if (client && isReady) return true;
     if (initPromise) return initPromise;
 
     initPromise = new Promise((resolve, reject) => {
         const token = process.env.DISCORD_TOKEN;
-        if (!token) { initPromise = null; return reject(new Error('DISCORD_TOKEN مفقود')); }
+        if (!token) {
+            initPromise = null;
+            return reject(new Error('DISCORD_TOKEN مفقود في .env'));
+        }
 
         try {
             client   = new Client({ checkUpdate: false });
@@ -43,10 +83,18 @@ async function initClient() {
             isReady = true; initPromise = null;
             resolve(true);
         });
-        client.on('error',      (e) => { console.error('❌ Discord:', e.message); isReady = false; });
-        client.on('disconnect', ()  => { console.warn('⚠️ انقطع'); isReady = false; isStreaming = false; });
+        client.on('error', (e) => {
+            console.error('❌ Discord error:', e.message);
+            isReady = false;
+        });
+        client.on('disconnect', () => {
+            console.warn('⚠️ Discord disconnect');
+            isReady = false;
+            isStreaming = false;
+        });
         client.login(token).catch((e) => {
-            initPromise = null; isReady = false;
+            initPromise = null;
+            isReady = false;
             reject(new Error(`فشل تسجيل الدخول: ${e.message}`));
         });
     });
@@ -54,79 +102,63 @@ async function initClient() {
     return initPromise;
 }
 
-initClient().catch((e) => console.error('⚠️ init:', e.message));
+initClient().catch((e) => console.error('⚠️ init error:', e.message));
 
-// ─── Pre-process: يقرأ الفيديو بسرعته الطبيعية ويحوله لـ stream ────────────
-// الفكرة: ffmpeg -re يقرأ بنفس FPS الفيديو الأصلي
-// prepareStream ياكل من الـ stream هذا فيتحكم فيه التوقيت تلقائياً
-function createRateLimitedStream(filePath) {
-    const passthrough = new PassThrough({
-        highWaterMark: 256 * 1024   // 256KB — backpressure يمنع ffmpeg يقرأ أسرع من playStream
-    });
+// ─── تنظيف الحالة بعد كل بث ───────────────────────────────────────────────
+function resetState(filePath) {
+    isStreaming    = false;
+    activeCommand  = null;
+    activeThrottle = null;
 
-    const cmd = ffmpeg(filePath)
-        .inputOption('-re')          // ← يقرأ بسرعة الفيديو الحقيقية (1x)
-        .outputOptions([
-            '-c:v copy',             // نسخ بدون إعادة تشفير = أقل CPU
-            '-c:a copy',
-            '-f mpegts',             // MPEG-TS مناسب للـ streaming
-            '-muxdelay 0',
-            '-muxpreload 0',
-        ])
-        .on('start', (cmd) => console.log('[pre-ffmpeg] بدأ:', cmd.slice(0, 80)))
-        .on('error', (err) => {
-            if (!err.message.includes('SIGKILL') && !err.message.includes('SIGTERM')) {
-                console.error('[pre-ffmpeg] خطأ:', err.message);
-            }
-            passthrough.destroy();
-        })
-        .on('end', () => {
-            console.log('[pre-ffmpeg] انتهى');
-            passthrough.end();
-            preProcessCmd = null;
-        });
+    // اخرج من الروم بعد الانتهاء
+    try { streamer.leaveVoice(); } catch {}
 
-    cmd.pipe(passthrough, { end: false });
-    preProcessCmd = cmd;
+    // احذف الملف المؤقت
+    if (filePath && fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); console.log(`🗑️ حُذف: ${filePath}`); }
+        catch {}
+    }
 
-    return passthrough;
+    // اعدّل currentFile فقط لو ما تغير (race condition prevention)
+    if (currentFile === filePath) currentFile = null;
 }
 
 // ─── بدء البث ──────────────────────────────────────────────────────────────
-export async function startStream(filePath, fileId) {
+export async function startStream(filePath) {
     console.log(`[startStream] ${filePath}`);
 
-    if (isStreaming)               return { success: false, message: 'البث قيد التشغيل بالفعل' };
+    if (isStreaming)               return { success: false, message: 'بث قيد التشغيل بالفعل' };
     if (!filePath)                 return { success: false, message: 'لا يوجد مسار فيديو' };
     if (!fs.existsSync(filePath))  return { success: false, message: `الملف غير موجود: ${filePath}` };
 
     const guildId   = process.env.GUILD_ID;
     const channelId = process.env.CHANNEL_ID;
-    if (!guildId || !channelId) return { success: false, message: 'GUILD_ID أو CHANNEL_ID مفقودان' };
+    if (!guildId || !channelId)
+        return { success: false, message: 'GUILD_ID أو CHANNEL_ID مفقودان في .env' };
 
     try {
-        if (!isReady) { console.log('🔄 إعادة الاتصال...'); await initClient(); }
+        // إعادة اتصال إن انقطع
+        if (!isReady) {
+            console.log('🔄 إعادة الاتصال...');
+            await initClient();
+        }
 
         const guild = client.guilds.cache.get(guildId);
-        if (!guild)             return { success: false, message: `السيرفر غير موجود: ${guildId}` };
+        if (!guild) return { success: false, message: `السيرفر غير موجود: ${guildId}` };
 
         const channel = guild.channels.cache.get(channelId);
         if (!channel)           return { success: false, message: `الروم غير موجود: ${channelId}` };
         if (!channel.isVoice()) return { success: false, message: `"${channel.name}" ليس روماً صوتياً` };
 
-        // نظّف الحالة القديمة
+        // نظّف أي بث قديم قبل البدء
         try { streamer.leaveVoice(); } catch {}
         await new Promise(r => setTimeout(r, 800));
 
-        console.log(`🎧 ${channel.name}`);
+        console.log(`🎧 الانضمام: ${channel.name}`);
         await streamer.joinVoice(guildId, channelId);
         console.log('✅ في الروم');
 
-        // ── إنشاء الـ stream المقيّد بالسرعة الطبيعية ──
-        console.log('⚙️ تجهيز stream بسرعة الفيديو الطبيعية...');
-        const inputStream = createRateLimitedStream(filePath);
-
-        // ── prepareStream يستقبل stream بدل مسار ملف ──
+        // ── prepareStream بالـ API الصحيح ──────────────────────────────────
         const encoder = Encoders.software({
             x264: { preset: 'ultrafast' },
             x265: { preset: 'ultrafast' }
@@ -134,64 +166,63 @@ export async function startStream(filePath, fileId) {
 
         let command, output;
         try {
-            const prepared = prepareStream(inputStream, {
+            ({ command, output } = prepareStream(filePath, {
                 encoder,
                 height:          720,
                 frameRate:       30,
                 bitrateVideo:    2500,
                 bitrateVideoMax: 3000,
                 videoCodec:      Utils.normalizeVideoCodec('H264'),
-            });
-            command = prepared.command;
-            output  = prepared.output;
+            }));
             console.log('✅ prepareStream جاهز');
         } catch (e) {
             console.error('❌ prepareStream:', e.message);
-            // أوقف الـ pre-process لو فشل
-            if (preProcessCmd) { try { preProcessCmd.kill(); } catch {} preProcessCmd = null; }
             return { success: false, message: `prepareStream فشل: ${e.message}` };
         }
 
-        if (!output) {
-            if (preProcessCmd) { try { preProcessCmd.kill(); } catch {} preProcessCmd = null; }
-            return { success: false, message: 'output فارغ من prepareStream' };
-        }
+        if (!output) return { success: false, message: 'output فارغ من prepareStream' };
 
-        command.on('error', (err, stdout, stderr) => {
-            if (!err.message.includes('SIGKILL')) {
-                console.error('❌ ffmpeg encode error:', err.message);
-                if (stderr) console.error('stderr:', stderr.slice(-300));
+        // سجّل أخطاء ffmpeg
+        command.on('error', (err, _stdout, stderr) => {
+            if (!err.message.includes('SIGKILL') && !err.message.includes('SIGTERM')) {
+                console.error('❌ ffmpeg error:', err.message);
+                if (stderr) console.error('ffmpeg stderr:', stderr.slice(-300));
             }
-            isStreaming = false; activeCommand = null;
-            deleteFile(currentFilePath);
+            resetState(currentFile);
         });
+        command.on('start', (cmd) => console.log('[ffmpeg] بدأ:', cmd.slice(0, 100)));
 
-        command.on('start', (cmd) => console.log('[ffmpeg encode] بدأ:', cmd.slice(0, 80)));
+        // ── ByteRateThrottle ────────────────────────────────────────────────
+        // 2500 kbps video + 128 kbps audio = 2628 kbps
+        // + 20% overhead = ~3160 kbps = ~395 KB/s
+        // نستخدم 450 KB/s هامش مريح
+        const throttle = new ByteRateThrottle(450 * 1024);
+        const throttledOutput = output.pipe(throttle);
 
-        activeCommand   = command;
-        currentFilePath = filePath;
-        isStreaming     = true;
+        // سجّل الحالة
+        currentFile    = filePath;
+        activeCommand  = command;
+        activeThrottle = throttle;
+        isStreaming    = true;
+        console.log('🎥 بدأ البث عبر ByteRateThrottle @ 450KB/s');
 
-        playStream(output, streamer, { type: 'go-live' })
+        // playStream تستقبل الـ stream المقيّد وترسله لـ Discord
+        playStream(throttledOutput, streamer, { type: 'go-live' })
             .then(() => {
-                console.log('✅ انتهى الفيديو');
-                isStreaming = false; activeCommand = null;
-                try { streamer.leaveVoice(); } catch {}
-                deleteFile(currentFilePath);
+                console.log('✅ انتهى الفيديو بشكل طبيعي');
+                resetState(currentFile);
             })
             .catch((e) => {
-                if (!e.message?.includes('SIGKILL')) {
-                    console.error('❌ playStream:', e.message);
+                if (!e?.message?.includes('SIGKILL') && !e?.message?.includes('SIGTERM')) {
+                    console.error('❌ playStream error:', e.message);
                 }
-                isStreaming = false; activeCommand = null;
-                try { streamer.leaveVoice(); } catch {}
-                deleteFile(currentFilePath);
+                resetState(currentFile);
             });
 
         return { success: true, message: '🎥 بدأ البث بنجاح!' };
 
     } catch (error) {
-        console.error('❌ startStream:', error.message);
+        console.error('❌ startStream unexpected:', error.message, error.stack);
         isStreaming = false;
         return { success: false, message: error.message };
     }
@@ -199,39 +230,43 @@ export async function startStream(filePath, fileId) {
 
 // ─── إيقاف البث ────────────────────────────────────────────────────────────
 export async function stopStream() {
-    if (!isStreaming && !activeCommand && !preProcessCmd) {
+    if (!isStreaming && !activeCommand) {
         return { success: false, message: 'لا يوجد بث نشط' };
     }
+
+    const fileToDelete = currentFile; // احفظ القيمة قبل reset
+
     try {
-        // أوقف الـ pre-process أولاً
-        if (preProcessCmd) {
-            try { preProcessCmd.kill('SIGKILL'); } catch {}
-            preProcessCmd = null;
-        }
-        // ثم الـ encoder
+        // أوقف ffmpeg
         if (activeCommand) {
             try { activeCommand.kill('SIGKILL'); } catch {}
             activeCommand = null;
         }
-        streamer.stopStream();
-        isStreaming = false;
-        try { streamer.leaveVoice(); } catch {}
-        deleteFile(currentFilePath);
+
+        // أوقف الـ throttle
+        if (activeThrottle) {
+            try { activeThrottle.destroy(); } catch {}
+            activeThrottle = null;
+        }
+
+        // أوقف البث في Discord
+        try { streamer.stopStream(); } catch {}
+
+        resetState(fileToDelete);
         return { success: true, message: '🛑 تم إيقاف البث' };
+
     } catch (e) {
+        console.error('❌ stopStream error:', e.message);
         isStreaming = false;
         return { success: false, message: e.message };
     }
 }
 
-function deleteFile(fp) {
-    currentFilePath = null;
-    if (fp && fs.existsSync(fp)) {
-        try { fs.unlinkSync(fp); console.log(`🗑️ ${fp}`); }
-        catch {}
-    }
-}
-
+// ─── حالة البث ─────────────────────────────────────────────────────────────
 export function getStatus() {
-    return { isStreaming, isReady, user: client?.user?.tag ?? null };
+    return {
+        isStreaming,
+        isReady,
+        user: client?.user?.tag ?? null
+    };
 }

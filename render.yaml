@@ -14,7 +14,4 @@ services:
         sync: false
       - key: PORT
         value: 3000
-    disk:
-      name: dark-cinema-data
-      mountPath: /opt/render/project/src
-      sizeGB: 1
+    healthCheckPath: /health
