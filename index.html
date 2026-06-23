@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dark Cinema Pro</title>
+    <title>Dark Cinema</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: system-ui, sans-serif;
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            background: #0f0c29;
             color: #eee;
             min-height: 100vh;
             display: flex;
@@ -17,153 +17,146 @@
             padding: 20px;
         }
         .card {
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.75);
             backdrop-filter: blur(10px);
             border-radius: 32px;
             padding: 2rem;
-            max-width: 680px;
+            max-width: 720px;
             width: 100%;
-            box-shadow: 0 25px 45px rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 25px 45px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
         }
-        h1 { text-align: center; color: #5865F2; font-size: 1.8rem; margin-bottom: .2rem; }
+        h1 { text-align: center; color: #5865F2; margin-bottom: .2rem; }
         .sub { text-align: center; opacity: .5; font-size: .85rem; margin-bottom: 1.5rem; }
 
-        /* Upload */
-        .upload-area {
-            border: 2px dashed #5865F2;
-            border-radius: 20px;
-            padding: 2rem;
-            text-align: center;
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            margin-bottom: 1rem;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .no-video {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #666;
+            font-size: 1.2rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .6rem;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        button {
+            border: none;
+            border-radius: 40px;
+            padding: 10px 20px;
+            font-size: .9rem;
+            font-weight: bold;
             cursor: pointer;
             transition: .2s;
-            margin-bottom: 1.2rem;
-        }
-        .upload-area:hover  { background: rgba(88,101,242,.1); border-color: #7983f5; }
-        .upload-area.over   { background: rgba(88,101,242,.2); border-color: #fff; }
-        .upload-area.disabled { opacity: .4; pointer-events: none; }
-        input[type="file"] { display: none; }
-        .upload-icon { font-size: 2.5rem; margin-bottom: .5rem; }
-
-        /* Upload progress */
-        .upload-progress { display: none; margin-bottom: 1.2rem; }
-        .upload-progress.show { display: block; }
-        .prog-header { display: flex; justify-content: space-between; font-size: .83rem; margin-bottom: .4rem; }
-        .prog-pct  { color: #5865F2; font-weight: bold; }
-        .prog-bg   { background: rgba(255,255,255,.1); border-radius: 100px; height: 10px; overflow: hidden; }
-        .prog-fill {
-            height: 100%; border-radius: 100px;
-            background: linear-gradient(90deg, #5865F2, #7983f5);
-            width: 0%; transition: width .3s;
-        }
-        .prog-fill.done  { background: #57F287; }
-        .prog-fill.error { background: #da373c; }
-        .prog-sub { font-size: .75rem; opacity: .6; text-align: center; margin-top: .35rem; }
-
-        /* Video info */
-        .video-info {
-            display: none;
-            background: rgba(87,242,135,.07);
-            border: 1px solid rgba(87,242,135,.2);
-            border-radius: 12px;
-            padding: .7rem 1rem;
-            margin-bottom: 1.2rem;
-            font-size: .82rem;
-        }
-        .video-info.show { display: block; }
-        .video-info strong { color: #57F287; }
-
-        /* Buttons */
-        .btn-group { display: flex; gap: .8rem; margin-bottom: 1.2rem; }
-        button {
-            flex: 1; border: none; border-radius: 40px;
-            padding: 12px 20px; font-size: .95rem; font-weight: bold;
-            cursor: pointer; transition: .2s; color: #fff;
+            color: #fff;
             background: #5865F2;
+            flex: 0 1 auto;
+            min-width: 70px;
         }
         button:hover:not(:disabled) { filter: brightness(1.15); transform: scale(1.02); }
         button:disabled { opacity: .35; cursor: not-allowed; transform: none; }
-        .btn-stop { background: #da373c; }
+        .btn-danger { background: #da373c; }
+        .btn-danger:hover:not(:disabled) { filter: brightness(1.15); }
+        .btn-success { background: #23a55a; }
+        .btn-success:hover:not(:disabled) { filter: brightness(1.15); }
 
-        /* Status */
         .status-bar {
-            display: flex; align-items: center; gap: .6rem;
-            background: rgba(255,255,255,.05); border-radius: 12px;
-            padding: .7rem 1rem; margin-bottom: 1rem; font-size: .88rem;
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            background: rgba(255,255,255,.05);
+            border-radius: 12px;
+            padding: .7rem 1rem;
+            margin-bottom: 1rem;
+            font-size: .85rem;
         }
-        .dot { width: 10px; height: 10px; border-radius: 50%; background: #ED4245; flex-shrink: 0; }
-        .dot.live  { background: #57F287; animation: pulse 1.5s infinite; }
-        .dot.conn  { background: #faa81a; animation: pulse .8s infinite; }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ED4245;
+            flex-shrink: 0;
+        }
+        .dot.live { background: #57F287; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.3; } }
 
-        /* Logs */
         .logs {
-            background: #0a0a14; border-radius: 16px;
-            padding: .8rem 1rem; font-family: monospace;
-            font-size: .74rem; max-height: 200px; overflow-y: auto; line-height: 1.7;
+            background: #0a0a14;
+            border-radius: 16px;
+            padding: .8rem 1rem;
+            font-family: monospace;
+            font-size: .74rem;
+            max-height: 150px;
+            overflow-y: auto;
+            line-height: 1.7;
         }
-        .log-line { opacity: .8; }
-        .log-line.ok   { color: #57F287; opacity: 1; }
-        .log-line.err  { color: #ED4245; opacity: 1; }
-        .log-line.warn { color: #faa81a; opacity: 1; }
-        .log-time { opacity: .35; margin-right: .4rem; font-size: .7rem; }
+        .log-time { opacity: .35; margin-left: .4rem; }
+        .log-ok   { color: #57F287; }
+        .log-err  { color: #ED4245; }
+        .log-warn { color: #faa81a; }
     </style>
 </head>
 <body>
 <div class="card">
-    <h1>🎬 Dark Cinema Pro</h1>
-    <div class="sub">رفع مباشر • بث فوري إلى ديسكورد</div>
+    <h1>🎬 Dark Cinema</h1>
+    <div class="sub">بث مباشر إلى ديسكورد</div>
 
-    <!-- Upload -->
-    <div class="upload-area" id="uploadArea">
-        <div class="upload-icon">📁</div>
-        <div id="uploadText">اسحب الفيديو هنا أو اضغط للاختيار</div>
-        <input type="file" id="fileInput" accept="video/*">
+    <div class="video-container">
+        <video id="videoPlayer" controls></video>
     </div>
 
-    <!-- Upload Progress -->
-    <div class="upload-progress" id="uploadProgress">
-        <div class="prog-header">
-            <span id="progLabel">جاري الرفع...</span>
-            <span class="prog-pct" id="progPct">0%</span>
-        </div>
-        <div class="prog-bg"><div class="prog-fill" id="progFill"></div></div>
-        <div class="prog-sub" id="progSub"></div>
+    <div class="controls">
+        <button id="playBtn" class="btn-success">▶ تشغيل</button>
+        <button id="pauseBtn">⏸ إيقاف</button>
+        <button id="seekBack">⏪ -10s</button>
+        <button id="seekForward">⏩ +10s</button>
+        <button id="broadcastStart" class="btn-success">📡 بدء البث</button>
+        <button id="broadcastStop" class="btn-danger">⏹ إيقاف البث</button>
     </div>
 
-    <!-- Video Info -->
-    <div class="video-info" id="videoInfo"></div>
-
-    <!-- Buttons -->
-    <div class="btn-group">
-        <button id="startBtn" disabled>▶ بدء البث</button>
-        <button id="stopBtn" class="btn-stop" disabled>⏹ إيقاف</button>
-    </div>
-
-    <!-- Status -->
     <div class="status-bar">
         <div class="dot" id="dot"></div>
         <span id="statusText">غير متصل</span>
+        <span style="margin-right:auto; opacity:.5;">👥 <span id="viewers">0</span></span>
     </div>
 
-    <!-- Logs -->
     <div class="logs" id="logs"></div>
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
 <script>
-let currentFilePath = null;
-let currentFileId   = null;
+const socket = io();
+const video = document.getElementById('videoPlayer');
+let isPlaying = false;
+let isSyncing = false;
 
-// ── Logging ──────────────────────────────────────────────────────────────
 function log(msg, type = '') {
-    const div  = document.getElementById('logs');
+    const div = document.getElementById('logs');
     const line = document.createElement('div');
-    line.className = 'log-line ' + type;
     const t = new Date().toLocaleTimeString('ar');
-    line.innerHTML = `<span class="log-time">${t}</span>${msg}`;
+    line.innerHTML = `<span class="log-time">${t}</span> ${msg}`;
+    if (type) line.className = 'log-' + type;
     div.appendChild(line);
     div.scrollTop = div.scrollHeight;
-    while (div.children.length > 80) div.removeChild(div.firstChild);
+    while (div.children.length > 50) div.removeChild(div.firstChild);
 }
 
 function setStatus(text, state = '') {
@@ -171,187 +164,131 @@ function setStatus(text, state = '') {
     document.getElementById('dot').className = 'dot' + (state ? ' ' + state : '');
 }
 
-function setProgress(pct, label, sub = '', state = '') {
-    document.getElementById('progPct').textContent   = pct + '%';
-    document.getElementById('progLabel').textContent = label;
-    document.getElementById('progSub').textContent   = sub;
-    const fill = document.getElementById('progFill');
-    fill.style.width = pct + '%';
-    fill.className = 'prog-fill' + (state ? ' ' + state : '');
-}
-
-// ── Upload Area ───────────────────────────────────────────────────────────
-const area = document.getElementById('uploadArea');
-area.onclick = () => {
-    if (!area.classList.contains('disabled')) document.getElementById('fileInput').click();
-};
-area.addEventListener('dragover',  (e) => { e.preventDefault(); area.classList.add('over'); });
-area.addEventListener('dragleave', ()  => area.classList.remove('over'));
-area.addEventListener('drop', (e) => {
-    e.preventDefault(); area.classList.remove('over');
-    const f = e.dataTransfer.files[0];
-    if (f) handleFile(f);
-});
-document.getElementById('fileInput').onchange = (e) => {
-    if (e.target.files[0]) handleFile(e.target.files[0]);
-};
-
-// ── رفع الفيديو ───────────────────────────────────────────────────────────
-function handleFile(file) {
-    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-    log(`📁 ${file.name} — ${sizeMB} MB`);
-
-    currentFilePath = null;
-    currentFileId   = null;
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('videoInfo').classList.remove('show');
-    area.classList.add('disabled');
-    document.getElementById('uploadProgress').classList.add('show');
-    setProgress(0, 'جاري الرفع...', '');
-
-    const xhr      = new XMLHttpRequest();
-    const formData = new FormData();
-    formData.append('video', file);
-
-    // تقدم الرفع
-    xhr.upload.onprogress = (e) => {
-        if (!e.lengthComputable) return;
-        const pct  = Math.round((e.loaded / e.total) * 100);
-        const done = (e.loaded / 1024 / 1024).toFixed(1);
-        const total= (e.total  / 1024 / 1024).toFixed(1);
-        setProgress(pct, 'جاري الرفع...', `${done} / ${total} MB`);
-    };
-
-    xhr.onreadystatechange = () => {
-        if (xhr.readyState < 3) return;
-        const text = xhr.responseText;
-        const lines = text.split('\n');
-        for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-                const data = JSON.parse(line.slice(6));
-                if (data.stage === 'done') {
-                    currentFilePath = data.filePath;
-                    currentFileId   = data.fileId;
-
-                    setProgress(100, 'اكتمل الرفع!', '', 'done');
-                    log('✅ اكتمل الرفع — جاهز للبث', 'ok');
-
-                    document.getElementById('videoInfo').innerHTML =
-                        `<strong>✅ جاهز للبث</strong> — ${file.name} (${data.sizeMB} MB)`;
-                    document.getElementById('videoInfo').classList.add('show');
-                    document.getElementById('startBtn').disabled = false;
-                    area.classList.remove('disabled');
-                    setTimeout(() => document.getElementById('uploadProgress').classList.remove('show'), 2000);
-
-                } else if (data.stage === 'error') {
-                    setProgress(0, 'فشل الرفع!', data.error, 'error');
-                    log('❌ ' + data.error, 'err');
-                    area.classList.remove('disabled');
-                }
-            } catch {}
-        }
-    };
-
-    xhr.onerror = () => {
-        log('❌ انقطع الاتصال أثناء الرفع', 'err');
-        area.classList.remove('disabled');
-        document.getElementById('uploadProgress').classList.remove('show');
-    };
-
-    xhr.open('POST', '/upload-stream');
-    xhr.send(formData);
-}
-
-// ── بدء البث ─────────────────────────────────────────────────────────────
-document.getElementById('startBtn').onclick = async () => {
-    if (!currentFilePath) return;
-
-    log('▶ بدء البث...');
-    setStatus('جاري الاتصال...', 'conn');
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled  = false;
-
+async function loadVideo() {
     try {
-        const res  = await fetch('/api/start', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ filePath: currentFilePath, fileId: currentFileId })
-        });
-
-        const text = await res.text();
-        let data;
-        try { data = JSON.parse(text); }
-        catch {
-            log('❌ رد غير متوقع: ' + text.slice(0, 120), 'err');
-            setStatus('خطأ في السيرفر');
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled  = true;
-            return;
+        const res = await fetch('/api/video');
+        const data = await res.json();
+        if (data.exists) {
+            video.src = '/video/episode.mp4';
+            video.load();
+            log('📹 تم تحميل الحلقة', 'ok');
+        } else {
+            log('⚠️ لا يوجد فيديو في مجلد video/', 'warn');
         }
+    } catch (e) { log('❌ ' + e.message, 'err'); }
+}
+loadVideo();
 
+document.getElementById('playBtn').onclick = () => {
+    if (video.paused) {
+        video.play();
+        socket.emit('play');
+    }
+};
+
+document.getElementById('pauseBtn').onclick = () => {
+    if (!video.paused) {
+        video.pause();
+        socket.emit('pause');
+    }
+};
+
+document.getElementById('seekBack').onclick = () => {
+    const t = Math.max(0, video.currentTime - 10);
+    video.currentTime = t;
+    socket.emit('seek', t);
+};
+
+document.getElementById('seekForward').onclick = () => {
+    const t = Math.min(video.duration, video.currentTime + 10);
+    video.currentTime = t;
+    socket.emit('seek', t);
+};
+
+document.getElementById('broadcastStart').onclick = async () => {
+    log('📡 بدء البث إلى ديسكورد...');
+    document.getElementById('broadcastStart').disabled = true;
+    try {
+        const res = await fetch('/api/broadcast/start', { method: 'POST' });
+        const data = await res.json();
         if (data.success) {
-            log('🎥 ' + data.message, 'ok');
+            log('✅ ' + data.message, 'ok');
             setStatus('يبث الآن', 'live');
         } else {
             log('❌ ' + data.message, 'err');
             setStatus('فشل البث');
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled  = true;
         }
-    } catch (e) {
-        log('❌ ' + e.message, 'err');
-        setStatus('خطأ في الاتصال');
-        document.getElementById('startBtn').disabled = false;
-        document.getElementById('stopBtn').disabled  = true;
-    }
+    } catch (e) { log('❌ ' + e.message, 'err'); }
+    document.getElementById('broadcastStart').disabled = false;
 };
 
-// ── إيقاف البث ────────────────────────────────────────────────────────────
-document.getElementById('stopBtn').onclick = async () => {
+document.getElementById('broadcastStop').onclick = async () => {
     log('⏹ إيقاف البث...');
     try {
-        const res  = await fetch('/api/stop', { method: 'POST' });
-        const text = await res.text();
-        let data;
-        try { data = JSON.parse(text); } catch { data = { success: false, message: text }; }
-        log(data.success ? '🛑 ' + data.message : '⚠️ ' + data.message, data.success ? 'warn' : 'err');
+        const res = await fetch('/api/broadcast/stop', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            log('🛑 ' + data.message, 'warn');
+            setStatus('متوقف');
+        } else {
+            log('⚠️ ' + data.message, 'warn');
+        }
     } catch (e) { log('❌ ' + e.message, 'err'); }
-
-    setStatus('متوقف');
-    document.getElementById('startBtn').disabled = !currentFilePath;
-    document.getElementById('stopBtn').disabled  = true;
 };
 
-// ── Status Polling ────────────────────────────────────────────────────────
-async function poll() {
-    try {
-        const res = await fetch('/api/status');
-        if (!res.ok) return;
-        const data = JSON.parse(await res.text());
-        const dot  = document.getElementById('dot');
+socket.on('sync', ({ currentTime, isPlaying: playing }) => {
+    if (!isSyncing) {
+        video.currentTime = currentTime;
+        if (playing && video.paused) video.play();
+        if (!playing && !video.paused) video.pause();
+    }
+});
 
-        if (data.isStreaming) {
-            setStatus('يبث الآن', 'live');
-            document.getElementById('stopBtn').disabled = false;
-        } else if (!data.isReady) {
-            setStatus('جاري التهيئة...', 'conn');
-        } else {
-            if (dot.classList.contains('live')) {
-                log('✅ انتهى الفيديو تلقائياً', 'ok');
-                setStatus('انتهى');
-                document.getElementById('startBtn').disabled = !currentFilePath;
-                document.getElementById('stopBtn').disabled  = true;
-                currentFilePath = null; // الملف حُذف من السيرفر
-            } else if (!dot.classList.contains('conn')) {
-                setStatus('متصل' + (data.user ? ` (${data.user})` : ''));
-            }
-        }
-    } catch {}
-}
-setInterval(poll, 4000);
-poll();
-log('🚀 لوحة التحكم جاهزة');
+socket.on('play', (time) => {
+    video.currentTime = time;
+    if (video.paused) video.play();
+});
+
+socket.on('pause', (time) => {
+    video.currentTime = time;
+    if (!video.paused) video.pause();
+});
+
+socket.on('seek', (time) => {
+    video.currentTime = time;
+});
+
+socket.on('broadcast-status', (data) => {
+    log(data.success ? '✅ ' + data.message : '❌ ' + data.message, data.success ? 'ok' : 'err');
+    if (data.success) setStatus('يبث الآن', 'live');
+});
+
+socket.on('connect', () => {
+    log('🔗 متصل بالسيرفر', 'ok');
+});
+
+socket.on('disconnect', () => {
+    log('🔌 انقطع الاتصال', 'err');
+});
+
+video.addEventListener('play', () => {
+    if (!isSyncing) { isPlaying = true; socket.emit('play', video.currentTime); }
+});
+
+video.addEventListener('pause', () => {
+    if (!isSyncing) { isPlaying = false; socket.emit('pause', video.currentTime); }
+});
+
+video.addEventListener('seeked', () => {
+    if (!isSyncing) socket.emit('seek', video.currentTime);
+});
+
+socket.on('viewers', (count) => {
+    document.getElementById('viewers').textContent = count;
+});
+
+log('🚀 Dark Cinema جاهزة');
+setStatus('جاهز');
 </script>
 </body>
 </html>
