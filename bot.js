@@ -1,7 +1,7 @@
 import { WebSocket } from 'ws';
 global.WebSocket = WebSocket;
 
-import { Client } from 'slfcrd';
+import { Client } from 'discord.js-selfbot-v13';
 import { MediaManager } from 'dispertisex';
 import dotenv from 'dotenv';
 import fs from 'fs';
@@ -43,9 +43,7 @@ async function initClient() {
         // تهيئة MediaManager من dispertisex
         manager = new MediaManager(client, {
             cacheDir: './cache',
-            maxCacheFiles: 10,
-            // مهم: تحديد أننا نريد بث فيديو
-            streamType: 'video'
+            maxCacheFiles: 10
         });
 
         return true;
@@ -82,16 +80,13 @@ async function startBroadcast() {
 
         console.log(`🎧 محاولة الانضمام إلى: ${channel.name}`);
 
-        // استخدام dispertisex للانضمام للروم والبث
-        // ملاحظة: dispertisex تتولى كل شيء: الانضمام، البث، المزامنة
+        // ✅ استخدام dispertisex بالطريقة الصحيحة حسب التوثيق
+        // streamType: 'video' = Go Live mode[reference:5]
         await manager.play(channelId, VIDEO_FILE, {
-            streamType: 'video',   // 'video' = Go Live
+            streamType: 'video',
             quality: '720p',
             volume: 100,
-            loop: false,
-            // هذه الخيارات تحدد جودة البث
-            bitrate: 2500,
-            fps: 30
+            loop: false
         });
 
         isStreaming = true;
