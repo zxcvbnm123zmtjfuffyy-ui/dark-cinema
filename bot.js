@@ -1,16 +1,20 @@
-const { Client } = require('djs-selfbot-v13');
-const { Streamer } = require('@dank074/discord-video-stream');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const dotenv = require('dotenv');
-const fs = require('fs');
-const path = require('path');
+import { WebSocket } from 'ws';
+global.WebSocket = WebSocket;
+
+import { Client } from 'slfcrd';
+import { MediaManager } from 'dispertisex';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
 let client = null;
-let streamer = null;
-let connection = null;
-let player = null;
+let manager = null;
 let isStreaming = false;
 let isReady = false;
 
@@ -25,7 +29,6 @@ async function initClient() {
 
     try {
         client = new Client({ checkUpdate: false });
-        streamer = new Streamer(client);
 
         await new Promise((resolve, reject) => {
             client.once('ready', () => {
@@ -35,6 +38,14 @@ async function initClient() {
             });
             client.on('error', reject);
             client.login(token).catch(reject);
+        });
+
+        // تهيئة MediaManager من dispertisex
+        manager = new MediaManager(client, {
+            cacheDir: './cache',
+            maxCacheFiles: 10,
+            // مهم: تحديد أننا نريد بث فيديو
+            streamType: 'video'
         });
 
         return true;
@@ -69,77 +80,35 @@ async function startBroadcast() {
             return { success: false, message: 'الروم غير موجود أو ليس صوتياً' };
         }
 
-        // محاولة الدخول عبر Streamer (طريقة البث المباشر)
-        try {
-            await streamer.joinVoice(guildId, channelId);
-            console.log(`🎧 تم الانضمام إلى: ${channel.name} (via Streamer)`);
-            
-            // تجهيز البث باستخدام @dank074/discord-video-stream
-            const { prepareStream, playStream, Utils } = require('@dank074/discord-video-stream');
-            const { command, output } = prepareStream(VIDEO_FILE, {
-                videoCodec: 'H264',
-                width: 1280,
-                height: 720,
-                frameRate: 30,
-                bitrateVideo: 2500,
-                bitrateVideoMax: 3000,
-                includeAudio: true,
-                h26xPreset: 'ultrafast'
-            });
+        console.log(`🎧 محاولة الانضمام إلى: ${channel.name}`);
 
-            console.log('✅ prepareStream جاهز');
+        // استخدام dispertisex للانضمام للروم والبث
+        // ملاحظة: dispertisex تتولى كل شيء: الانضمام، البث، المزامنة
+        await manager.play(channelId, VIDEO_FILE, {
+            streamType: 'video',   // 'video' = Go Live
+            quality: '720p',
+            volume: 100,
+            loop: false,
+            // هذه الخيارات تحدد جودة البث
+            bitrate: 2500,
+            fps: 30
+        });
 
-            command.on('error', (err) => {
-                console.error('❌ ffmpeg error:', err.message);
-                isStreaming = false;
-            });
+        isStreaming = true;
+        console.log('🎥 بدأ البث بنجاح!');
 
-            command.on('start', (cmd) => {
-                console.log('[ffmpeg]', cmd.slice(0, 150));
-            });
+        // مراقبة انتهاء البث
+        manager.on('finish', () => {
+            console.log('✅ انتهى البث');
+            isStreaming = false;
+        });
 
-            isStreaming = true;
-            await playStream(output, streamer, { type: 'go-live' });
-            console.log('🎥 بدأ البث بنجاح! (via Streamer)');
-            
-            return { success: true, message: '🎥 بدأ البث بنجاح!' };
+        manager.on('error', (err) => {
+            console.error('❌ خطأ في البث:', err.message);
+            isStreaming = false;
+        });
 
-        } catch (streamerError) {
-            console.warn('⚠️ Streamer failed, falling back to @discordjs/voice:', streamerError.message);
-            
-            // الطريقة البديلة: @discordjs/voice (صوت فقط)
-            connection = joinVoiceChannel({
-                channelId: channel.id,
-                guildId: guild.id,
-                adapterCreator: guild.voiceAdapterCreator,
-            });
-
-            console.log(`🎧 تم الانضمام إلى: ${channel.name} (via @discordjs/voice)`);
-
-            player = createAudioPlayer();
-            connection.subscribe(player);
-
-            const resource = createAudioResource(VIDEO_FILE, {
-                inlineVolume: true,
-                metadata: { title: path.basename(VIDEO_FILE) }
-            });
-
-            player.play(resource);
-            isStreaming = true;
-
-            player.on(AudioPlayerStatus.Idle, () => {
-                console.log('✅ انتهى التشغيل');
-                isStreaming = false;
-            });
-
-            player.on('error', (err) => {
-                console.error('❌ خطأ في التشغيل:', err.message);
-                isStreaming = false;
-            });
-
-            console.log('🎥 بدأ التشغيل بنجاح! (via @discordjs/voice)');
-            return { success: true, message: '🎥 بدأ التشغيل بنجاح!' };
-        }
+        return { success: true, message: '🎥 بدأ البث بنجاح!' };
 
     } catch (err) {
         console.error('❌ startBroadcast error:', err.message);
@@ -154,20 +123,7 @@ async function stopBroadcast() {
     }
 
     try {
-        // إيقاف Streamer
-        try { streamer?.stopStream(); } catch {}
-        try { streamer?.leaveVoice(); } catch {}
-
-        // إيقاف @discordjs/voice
-        if (player) {
-            player.stop();
-            player = null;
-        }
-        if (connection) {
-            connection.destroy();
-            connection = null;
-        }
-
+        await manager.stop({ leaveVoice: true });
         isStreaming = false;
         console.log('🛑 تم إيقاف البث');
         return { success: true, message: '🛑 تم إيقاف البث' };
@@ -186,4 +142,4 @@ function getStatus() {
     };
 }
 
-module.exports = { startBroadcast, stopBroadcast, getStatus };
+export { startBroadcast, stopBroadcast, getStatus };

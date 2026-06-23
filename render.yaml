@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: dark-cinema-v3
+    name: dark-cinema-v4
     env: node
     plan: free
     buildCommand: |

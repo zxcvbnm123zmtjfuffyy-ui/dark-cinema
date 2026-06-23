@@ -1,15 +1,13 @@
 {
-  "name": "dark-cinema-v3",
-  "version": "3.0.0",
-  "type": "commonjs",
+  "name": "dark-cinema-v4",
+  "version": "4.0.0",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "slfcrd": "^1.0.2",
     "dispertisex": "^2.0.0",
-    "djs-selfbot-v13": "^3.7.43",
-    "@dank074/discord-video-stream": "^6.0.0",
     "@discordjs/voice": "^0.16.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
