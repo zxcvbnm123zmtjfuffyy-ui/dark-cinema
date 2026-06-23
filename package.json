@@ -6,7 +6,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@dank074/discord-video-stream": "6.0.0",
+    "@dank074/discord-video-stream": "5.0.0",
     "djs-selfbot-v13": "^3.7.43",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
