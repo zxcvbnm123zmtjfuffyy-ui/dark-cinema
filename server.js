@@ -1,10 +1,10 @@
-import express from 'express';
-import { createServer } from 'http';
-import { Server as SocketIO } from 'socket.io';
-import path from 'path';
-import fs from 'fs';
-import dotenv from 'dotenv';
-import { startBroadcast, stopBroadcast, getStatus } from './bot.js';
+const express = require('express');
+const { createServer } = require('http');
+const { Server: SocketIO } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
+const dotenv = require('dotenv');
+const { startBroadcast, stopBroadcast, getStatus } = require('./bot.js');
 
 dotenv.config();
 
