@@ -1,18 +1,18 @@
 {
   "name": "dark-cinema",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@dank074/discord-video-stream": "5.0.0",
+    "dispertisex": "^2.0.0",
     "djs-selfbot-v13": "^3.7.43",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "socket.io": "^4.8.1"
   },
   "engines": {
-    "node": "20.18.0"
+    "node": "22.4.0"
   }
 }

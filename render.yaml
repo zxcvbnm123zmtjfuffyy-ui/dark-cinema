@@ -3,7 +3,10 @@ services:
     name: dark-cinema
     env: node
     plan: free
-    buildCommand: "apt-get update -y && apt-get install -y ffmpeg && npm install"
+    buildCommand: |
+      apt-get update -y
+      apt-get install -y ffmpeg
+      npm install
     startCommand: npm start
     envVars:
       - key: DISCORD_TOKEN
@@ -14,6 +17,6 @@ services:
         sync: false
       - key: PORT
         value: 3000
-      - key: FFMPEG_PATH
-        value: /usr/bin/ffmpeg
+      - key: NODE_VERSION
+        value: 22.4.0
     healthCheckPath: /api/status

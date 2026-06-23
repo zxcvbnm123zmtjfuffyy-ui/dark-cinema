@@ -2,7 +2,7 @@ import { WebSocket } from 'ws';
 global.WebSocket = WebSocket;
 
 import { Client } from 'djs-selfbot-v13';
-import { Streamer, prepareStream, playStream, Utils, Encoders } from '@dank074/discord-video-stream';
+import { MediaManager } from 'dispertisex';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
@@ -10,75 +10,47 @@ import path from 'path';
 dotenv.config();
 
 let client = null;
-let streamer = null;
+let manager = null;
 let isStreaming = false;
 let isReady = false;
-let currentFile = null;
-let activeCommand = null;
-let initPromise = null;
 
 const VIDEO_DIR = path.join(process.cwd(), 'video');
 const VIDEO_FILE = path.join(VIDEO_DIR, 'episode.mp4');
 
 async function initClient() {
     if (client && isReady) return true;
-    if (initPromise) return initPromise;
 
-    initPromise = new Promise((resolve, reject) => {
-        const token = process.env.DISCORD_TOKEN;
-        if (!token) {
-            initPromise = null;
-            return reject(new Error('DISCORD_TOKEN مفقود'));
-        }
+    const token = process.env.DISCORD_TOKEN;
+    if (!token) throw new Error('DISCORD_TOKEN مفقود');
 
-        try {
-            client = new Client({ checkUpdate: false });
-            streamer = new Streamer(client);
-        } catch (e) {
-            initPromise = null;
-            return reject(new Error(`Client: ${e.message}`));
-        }
-
-        client.once('ready', () => {
-            console.log(`✅ Discord: ${client.user.tag}`);
-            isReady = true;
-            initPromise = null;
-            resolve(true);
+    try {
+        client = new Client({ checkUpdate: false });
+        manager = new MediaManager(client, {
+            cacheDir: './cache',
+            maxCacheFiles: 10
         });
 
-        client.on('error', (e) => {
-            console.error('❌ Discord error:', e.message);
-            isReady = false;
+        await new Promise((resolve, reject) => {
+            client.once('ready', () => {
+                console.log(`✅ Discord: ${client.user.tag}`);
+                isReady = true;
+                resolve();
+            });
+            client.on('error', reject);
+            client.login(token).catch(reject);
         });
 
-        client.on('disconnect', () => {
-            isReady = false;
-            isStreaming = false;
-        });
-
-        client.login(token).catch(e => {
-            initPromise = null;
-            isReady = false;
-            reject(new Error(`فشل تسجيل الدخول: ${e.message}`));
-        });
-    });
-
-    return initPromise;
-}
-
-initClient().catch(e => console.error('init error:', e.message));
-
-function cleanup() {
-    isStreaming = false;
-    activeCommand = null;
-    try { streamer?.leaveVoice(); } catch {}
+        return true;
+    } catch (err) {
+        console.error('❌ فشل التهيئة:', err.message);
+        throw err;
+    }
 }
 
 export async function startBroadcast() {
     console.log('[startBroadcast] بدء البث...');
 
     if (isStreaming) return { success: false, message: 'بث جاري بالفعل' };
-
     if (!fs.existsSync(VIDEO_FILE)) {
         return { success: false, message: `الملف غير موجود: ${VIDEO_FILE}` };
     }
@@ -90,7 +62,7 @@ export async function startBroadcast() {
     }
 
     try {
-        if (!isReady) await initClient();
+        await initClient();
 
         const guild = client.guilds.cache.get(guildId);
         if (!guild) return { success: false, message: `سيرفر غير موجود: ${guildId}` };
@@ -100,44 +72,30 @@ export async function startBroadcast() {
             return { success: false, message: 'الروم غير موجود أو ليس صوتياً' };
         }
 
-        try { streamer.leaveVoice(); } catch {}
-        await new Promise(r => setTimeout(r, 500));
+        // الانضمام للروم الصوتي
+        await channel.join();
+        console.log(`🎧 تم الانضمام إلى: ${channel.name}`);
 
-        console.log(`🎧 الانضمام إلى: ${channel.name}`);
-        await streamer.joinVoice(guildId, channelId);
-        console.log('✅ تم الانضمام إلى الروم الصوتي');
-
-        const encoder = Encoders.software({
-            x264: { preset: 'ultrafast' }
-        });
-
-        const { command, output } = prepareStream(VIDEO_FILE, {
-            encoder: encoder,
-            height: 720,
-            frameRate: 30,
-            bitrateVideo: 2500,
-            videoCodec: Utils.normalizeVideoCodec('H264'),
-        });
-
-        console.log('✅ prepareStream جاهز');
-        activeCommand = command;
-
-        command.on('error', (err) => {
-            console.error('❌ ffmpeg error:', err.message);
-            isStreaming = false;
-            activeCommand = null;
-        });
-
-        command.on('start', (cmd) => {
-            console.log('[ffmpeg]', cmd.slice(0, 150));
+        // البث باستخدام dispertisex - واجهة واحدة لكل شيء
+        await manager.play(channelId, VIDEO_FILE, {
+            streamType: 'video',
+            quality: '720p',
+            youtubeDelivery: 'file'
         });
 
         isStreaming = true;
-        currentFile = VIDEO_FILE;
+        console.log('🎥 بدأ البث بنجاح!');
 
-        await playStream(output, streamer, { type: 'go-live' });
-        console.log('✅ انتهى الفيديو');
-        isStreaming = false;
+        // مراقبة انتهاء البث
+        manager.on('finish', () => {
+            console.log('✅ انتهى البث');
+            isStreaming = false;
+        });
+
+        manager.on('error', (err) => {
+            console.error('❌ خطأ في البث:', err.message);
+            isStreaming = false;
+        });
 
         return { success: true, message: '🎥 بدأ البث بنجاح!' };
 
@@ -149,21 +107,14 @@ export async function startBroadcast() {
 }
 
 export async function stopBroadcast() {
-    if (!isStreaming && !activeCommand) {
+    if (!isStreaming) {
         return { success: false, message: 'لا يوجد بث نشط' };
     }
 
-    console.log('[stopBroadcast] إيقاف البث...');
-
     try {
-        if (activeCommand) {
-            activeCommand.kill('SIGKILL');
-            activeCommand = null;
-        }
-        try { streamer?.stopStream(); } catch {}
-        try { streamer?.leaveVoice(); } catch {}
+        await manager.stop({ leaveVoice: true });
         isStreaming = false;
-        console.log('✅ تم إيقاف البث');
+        console.log('🛑 تم إيقاف البث');
         return { success: true, message: '🛑 تم إيقاف البث' };
     } catch (err) {
         console.error('❌ stopBroadcast error:', err.message);
@@ -176,7 +127,6 @@ export function getStatus() {
         isStreaming,
         isReady,
         user: client?.user?.tag ?? null,
-        hasVideo: fs.existsSync(VIDEO_FILE),
-        videoFile: VIDEO_FILE
+        hasVideo: fs.existsSync(VIDEO_FILE)
     };
 }
